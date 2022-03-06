@@ -31,6 +31,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 
 #include "../include/global.h"
 #include "../include/logger.h"
@@ -42,6 +43,7 @@ using namespace std;
 #define TRUE 1
 #define CMD_SIZE 100
 #define BUFFER_SIZE 256
+#define UDP_PORT 53
 
 enum Command
 {
@@ -74,6 +76,44 @@ void log_error(const char* command_str){
 	cse4589_print_and_log("[%s:END]\n", command_str);
 }
 
+char* getIP(){
+	char buffer[100];
+    int sockfd, n;
+    struct sockaddr_in servaddr;
+      
+    // clear servaddr
+    bzero(&servaddr, sizeof(servaddr));
+    servaddr.sin_addr.s_addr = inet_addr("8.8.8.8");
+    servaddr.sin_port = htons(UDP_PORT);
+    servaddr.sin_family = AF_INET;
+
+    // create datagram socket
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+      
+    // connect to server
+    if(connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0)
+    {
+        printf("\n Error : Connect Failed \n");
+        exit(0);
+    }
+
+	struct sockaddr_storage remoteaddr; // client address
+    socklen_t addrlen;
+	getsockname(sockfd, (struct sockaddr*)&remoteaddr, &addrlen);
+
+	char remoteIP[INET6_ADDRSTRLEN];
+	if (remoteaddr.ss_family == AF_INET) {
+        struct sockaddr_in *s = (struct sockaddr_in *)&remoteaddr;
+        inet_ntop(AF_INET, &s->sin_addr, remoteIP, addrlen);
+    }
+	printf("IP_ADDRESS:%s", remoteIP);
+
+	char *ip_addr;
+	strcpy(ip_addr, remoteIP);
+
+	return ip_addr;
+}
+
 
 void act_on_command(char *cmd){
 	char buffer [10000];
@@ -90,6 +130,8 @@ void act_on_command(char *cmd){
 		return;
 	}
 
+	char* ip_addr;
+
 	switch (command)
 	{
 	case AUTHOR:
@@ -97,7 +139,11 @@ void act_on_command(char *cmd){
 		"prateekb");
 		log_success(my_command.c_str(), buffer);
 		break;
-	
+	case IP:
+		ip_addr = getIP();
+		sprintf(buffer, "IP:%s\n", ip_addr);
+		log_success(my_command.c_str(), buffer);
+		break;
 	default:
 		break;
 	}
