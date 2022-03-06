@@ -26,6 +26,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <strings.h>
+#include <map>
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -41,6 +42,60 @@ using namespace std;
 #define TRUE 1
 #define CMD_SIZE 100
 #define BUFFER_SIZE 256
+
+enum Command
+{
+    IP,
+    AUTHOR,
+    PORT,
+	LIST
+};
+
+struct CommandMap : public std::map<std::string, Command>
+{
+    CommandMap()
+    {
+        this->operator[]("IP") =  IP;
+        this->operator[]("AUTHOR") = AUTHOR;
+        this->operator[]("PORT") = PORT;
+		this->operator[]("LIST") = LIST;
+    };
+    ~CommandMap(){}
+};
+
+void log_success(const char* command_str, const char* msg){
+	cse4589_print_and_log("[%s:SUCCESS]\n", command_str);
+	cse4589_print_and_log(msg);
+	cse4589_print_and_log("[%s:END]\n", command_str);
+}
+
+
+void act_on_command(char *cmd){
+	char buffer [10000];
+	string my_command = std::string(cmd);
+	if (!my_command.empty() && my_command[my_command.length()-1] == '\n') {
+    	my_command.erase(my_command.length()-1);
+	}
+	CommandMap map = CommandMap();
+	Command command;
+	if(map.count(my_command)){
+		command = map[my_command];
+	} else {
+		return;
+	}
+
+	switch (command)
+	{
+	case AUTHOR:
+		sprintf(buffer, "I, %s, have read and understood the course academic integrity policy.\n",
+		"prateekb");
+		log_success(my_command.c_str(), buffer);
+		break;
+	
+	default:
+		break;
+	}
+}
 
 
 void start_server(char **argv)
@@ -116,6 +171,7 @@ void start_server(char **argv)
 						if(fgets(cmd, CMD_SIZE-1, stdin) == NULL) //Mind the newline character that will be written to cmd
 							exit(-1);
 						
+						act_on_command(cmd);
 						printf("\nI got: %s\n", cmd);
 						
 						//Process PA1 commands here ...
