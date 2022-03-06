@@ -69,6 +69,11 @@ void log_success(const char* command_str, const char* msg){
 	cse4589_print_and_log("[%s:END]\n", command_str);
 }
 
+void log_error(const char* command_str){
+	cse4589_print_and_log("[%s:ERROR]\n", command_str);
+	cse4589_print_and_log("[%s:END]\n", command_str);
+}
+
 
 void act_on_command(char *cmd){
 	char buffer [10000];
@@ -81,6 +86,7 @@ void act_on_command(char *cmd){
 	if(map.count(my_command)){
 		command = map[my_command];
 	} else {
+		log_error(my_command.c_str());
 		return;
 	}
 
