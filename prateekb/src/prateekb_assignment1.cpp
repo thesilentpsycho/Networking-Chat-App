@@ -243,6 +243,8 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 	default:
 		break;
 	}
+
+	free(msg);
 }
 
 
