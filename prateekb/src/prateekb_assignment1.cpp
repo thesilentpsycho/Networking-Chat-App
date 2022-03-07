@@ -33,6 +33,8 @@
 #include <sys/types.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <sstream>
+#include <iterator>
 
 #include "../include/global.h"
 #include "../include/logger.h"
@@ -43,8 +45,8 @@ using namespace std;
 #define STDIN 0
 #define TRUE 1
 #define CMD_SIZE 100
-#define MSG_SIZE 256
-#define BUFFER_SIZE 256
+#define MSG_SIZE 512
+#define BUFFER_SIZE 512
 #define UDP_PORT 53
 
 enum Command
@@ -53,7 +55,9 @@ enum Command
     AUTHOR,
     PORT,
 	LIST,
-	LOGIN
+	LOGIN,
+	SEND,
+	BROADCAST
 };
 
 enum NodeType{
@@ -70,6 +74,8 @@ struct CommandMap : public std::map<std::string, Command>
         this->operator[]("PORT") = PORT;
 		this->operator[]("LIST") = LIST;
 		this->operator[]("LOGIN") = LOGIN;
+		this->operator[]("SEND") = SEND;
+		this->operator[]("BROADCAST") = BROADCAST;
     };
     ~CommandMap(){}
 };
@@ -147,6 +153,8 @@ bool is_number(const std::string& str)
 
 void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 	char buffer [10000];
+	char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
+
 	vector<string> command_chunks = split(std::string(cmd), " ");
 	string my_command = command_chunks[0];
 
@@ -163,6 +171,8 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 	int ip_success = 0;
 	struct sockaddr_in server_addr;
 	int server_port;
+	ostringstream concatenated;
+	string encoded_data;
 
 	switch (command)
 	{
@@ -210,6 +220,25 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		} else{
 			log_success(my_command.c_str(), buffer);
 		}
+		break;
+	case SEND:
+		if(command_chunks.size() < 3){
+			log_error(my_command.c_str());
+			return;
+		} else if(!is_valid_ip(command_chunks[1])){
+			log_error(my_command.c_str());
+			return;
+		}
+		command_chunks[1];
+		copy(command_chunks.begin() + 2, command_chunks.end(),
+           ostream_iterator<std::string>(concatenated, " "));
+
+		encoded_data = "SEND_ONE::::" + command_chunks[1] + "::::" + concatenated.str();
+		memset(msg, '\0', MSG_SIZE);
+		strcpy(msg, encoded_data.c_str());
+
+		if(send(client_fd, msg, strlen(msg), 0) == strlen(msg))
+			printf("Done!\n");
 		break;
 	default:
 		break;
