@@ -307,48 +307,91 @@ int connect_to_host(char *server_ip, char* server_port)
 
 int start_client(int port)
 {	
-	struct sockaddr_in client;
-	socklen_t clientsz = sizeof(client);
+	int client_fd = 0;
+
+	client_fd = socket(AF_INET, SOCK_STREAM, 0);
+	if(client_fd == 0){
+		exit(EXIT_FAILURE);
+	}
+
+	struct sockaddr_in client_addr, server_addr;
+	client_addr.sin_addr.s_addr = INADDR_ANY;
+    client_addr.sin_family = AF_INET;
+    client_addr.sin_port = htons(port);
+
+	if(bind(client_fd, (struct sockaddr *)&client_addr,sizeof(struct sockaddr_in)) < 0){
+		exit(EXIT_FAILURE);		//fatal
+	}
+
+	fd_set master_list, watch_list;
+	int cmax = 0, select_result, sock_index;
+
+	FD_ZERO(&master_list);
+	FD_ZERO(&watch_list);
+	FD_SET(client_fd, &master_list);
+	FD_SET(STDIN, &master_list);
+	
+	int head_socket = client_fd;
+
+	while(TRUE) {
+		memcpy(&watch_list, &master_list, sizeof(master_list));
+		
+		select_result = select(head_socket + 1, &watch_list, NULL, NULL, NULL);
+		if(select_result < 0)
+			perror("select failed.");
+		
+		/* Check if we have server message/STDIN to process */
+		if(select_result > 0){
+			/* Loop through socket descriptors to check which ones are ready */
+			for(sock_index=0; sock_index<=head_socket; sock_index+=1){
+				
+				if(FD_ISSET(sock_index, &watch_list)){
+					
+					/* Check if new command on STDIN */
+					if (sock_index == STDIN){
+						char *cmd = (char*) malloc(sizeof(char)*CMD_SIZE);
+						
+						memset(cmd, '\0', CMD_SIZE);
+						if(fgets(cmd, CMD_SIZE-1, stdin) == NULL) //Mind the newline character that will be written to cmd
+							exit(-1);
+						
+						act_on_command(cmd, port);
+						printf("\nI got: %s\n", cmd);
+						
+						//Process PA1 commands here ...
+						
+						free(cmd);
+					}
+					/* Check if new client is requesting connection */
+					else if(sock_index == client_fd){
+						
+					}
+					/* Read from existing clients */
+					else{
+						/* Initialize buffer to receieve response */
+						
+					}
+				}
+			}
+		}
+		
+	}
+
+	// socklen_t clientsz = sizeof(client);
 
 	int server;
 	char* server_ip;
 	char* server_port;
 
-	server = connect_to_host(server_ip, server_port);
+	// server = connect_to_host(server_ip, server_port);
 
 	//getting client-side socket details
-	getsockname(server, (struct sockaddr *) &client, &clientsz);
-	uint client_port = ntohs(client.sin_port);
-	std::cout<< "Port-->"<<client_port<<std::endl;
-	char buffer[20];
-	sprintf(buffer, "%u", client_port);
-	log_success("PORT", buffer);
-
-	while(TRUE){
-		printf("\n[PA1-Client@CSE489/589]$ ");
-		fflush(stdout);
-		
-		char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
-		memset(msg, '\0', MSG_SIZE);
-		if(fgets(msg, MSG_SIZE-1, stdin) == NULL) //Mind the newline character that will be written to msg
-			exit(-1);
-		
-		// printf("I got: %s(size:%d chars)", msg, strlen(msg));
-		
-		printf("\nSENDing it to the remote server ... ");
-		if(send(server, msg, strlen(msg), 0) == strlen(msg))
-			printf("Done!\n");
-		fflush(stdout);
-		
-		/* Initialize buffer to receieve response */
-		char *buffer = (char*) malloc(sizeof(char)*BUFFER_SIZE);
-		memset(buffer, '\0', BUFFER_SIZE);
-		
-		if(recv(server, buffer, BUFFER_SIZE, 0) >= 0){
-			printf("Server responded: %s", buffer);
-			fflush(stdout);
-		}
-	}
+	// getsockname(server, (struct sockaddr *) &client, &clientsz);
+	// uint client_port = ntohs(client.sin_port);
+	// std::cout<< "Port-->"<<client_port<<std::endl;
+	// char buffer[20];
+	// sprintf(buffer, "%u", client_port);
+	// log_success("PORT", buffer);
 }
 
 /**
