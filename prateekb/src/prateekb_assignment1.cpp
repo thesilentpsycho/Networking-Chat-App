@@ -67,6 +67,25 @@ enum NodeType{
 	SERVER
 };
 
+struct Client{
+    int id;
+    string *ip;
+    int client_fd;
+    string *hostname;
+	int port_no;
+    int login_status;	//1 = in	0 = out
+    int count_received;
+    int count_sent;
+};
+
+struct Block{
+	string blocker;
+	string blocked;
+};
+
+std::vector<Client> client_list;
+std::vector<Block> block_list;
+
 struct CommandMap : public std::map<std::string, Command>
 {
     CommandMap()
@@ -372,9 +391,6 @@ void start_server(int port)
 						
 						cmd[strcspn(cmd, "\n")] = '\0';
 						act_on_command(cmd, port, false, -1);
-						printf("\nI got: %s\n", cmd);
-						
-						//Process PA1 commands here ...
 						
 						free(cmd);
 					}
@@ -385,11 +401,13 @@ void start_server(int port)
 						if(fdaccept < 0)
 							perror("Accept failed.");
 						
+						printf("[%s:%u] > ", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 						printf("\nRemote Host connected!\n");                        
 						
 						/* Add to watched socket list */
 						FD_SET(fdaccept, &master_list);
 						if(fdaccept > head_socket) head_socket = fdaccept;
+
 					}
 					/* Read from existing clients */
 					else{
@@ -481,7 +499,7 @@ int start_client(int port)
 						
 						free(cmd);
 					}
-					/* Check if new client is requesting connection */
+					/* Check if server has sent something */
 					else if(sock_index == client_fd){
 						
 					}
