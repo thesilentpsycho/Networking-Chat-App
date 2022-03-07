@@ -106,7 +106,7 @@ int whats_my_ip(char *str)
     return 1;
 }
 
-void act_on_command(char *cmd){
+void act_on_command(char *cmd, int port){
 	char buffer [10000];
 	string my_command = std::string(cmd);
 	if (!my_command.empty() && my_command[my_command.length()-1] == '\n') {
@@ -139,7 +139,12 @@ void act_on_command(char *cmd){
 			log_success(my_command.c_str(), buffer);
 		} else {
 			log_error(my_command.c_str());
+			return;
 		}
+		break;
+	case PORT:
+		sprintf(buffer, "PORT:%d\n", port);
+		log_success(my_command.c_str(), buffer);
 		break;
 	default:
 		break;
@@ -147,7 +152,7 @@ void act_on_command(char *cmd){
 }
 
 
-void start_server(char **argv)
+void start_server(int port)
 {
 	
 	int server_socket, head_socket, selret, sock_index, fdaccept=0; 
@@ -163,7 +168,7 @@ void start_server(char **argv)
     	hints.ai_flags = AI_PASSIVE;
 
 	/* Fill up address structures */
-	if (getaddrinfo(NULL, argv[2], &hints, &res) != 0)
+	if (getaddrinfo(NULL, std::to_string(port).c_str(), &hints, &res) != 0)
 		perror("getaddrinfo failed");
 	
 	/* Socket */
@@ -220,7 +225,7 @@ void start_server(char **argv)
 						if(fgets(cmd, CMD_SIZE-1, stdin) == NULL) //Mind the newline character that will be written to cmd
 							exit(-1);
 						
-						act_on_command(cmd);
+						act_on_command(cmd, port);
 						printf("\nI got: %s\n", cmd);
 						
 						//Process PA1 commands here ...
@@ -300,7 +305,7 @@ int connect_to_host(char *server_ip, char* server_port)
 }
 
 
-int start_client(char **argv)
+int start_client(int port)
 {	
 	struct sockaddr_in client;
 	socklen_t clientsz = sizeof(client);
@@ -367,10 +372,11 @@ int main(int argc, char **argv)
 		exit(-1);
 	}
 
+	int port = atoi(argv[2]);
 	if (std::string(argv[1]) == "s") {
-		start_server(argv);
+		start_server(port);
 	} else if (std::string(argv[1]) == "c") {
-
+		start_client(port);
 	} else {
 		printf("Usage:%s [type:s/c] [port]\n", argv[0]);
 		exit(-1);
