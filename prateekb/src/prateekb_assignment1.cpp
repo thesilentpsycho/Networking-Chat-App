@@ -238,7 +238,7 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		strcpy(msg, encoded_data.c_str());
 
 		if(send(client_fd, msg, strlen(msg), 0) == strlen(msg))
-			printf("Done!\n");
+			log_success(my_command.c_str(), buffer);
 		break;
 	default:
 		break;
