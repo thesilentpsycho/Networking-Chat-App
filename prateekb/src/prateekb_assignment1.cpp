@@ -114,6 +114,7 @@ int whats_my_ip(char *str)
     return 1;
 }
 
+//https://stackoverflow.com/questions/5607589/right-way-to-split-an-stdstring-into-a-vectorstring
 vector<string> split(string str, string token){
     vector<string>result;
     while(str.size()){
@@ -130,7 +131,21 @@ vector<string> split(string str, string token){
     return result;
 }
 
-void act_on_command(char *cmd, int port, bool is_client){
+bool is_valid_ip(const string &ip)
+{
+    struct sockaddr_in temp;
+    int result = inet_pton(AF_INET, ip.c_str(), &(temp.sin_addr));
+    return result != 0;
+}
+
+bool is_number(const std::string& str)
+{
+    std::string::const_iterator it = str.begin();
+    while (it != str.end() && std::isdigit(*it)) ++it;
+    return !str.empty() && it == str.end();
+}
+
+void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 	char buffer [10000];
 	vector<string> command_chunks = split(std::string(cmd), " ");
 	string my_command = command_chunks[0];
@@ -146,6 +161,8 @@ void act_on_command(char *cmd, int port, bool is_client){
 
 	char* ip_addr;
 	int ip_success = 0;
+	struct sockaddr_in server_addr;
+	int server_port;
 
 	switch (command)
 	{
@@ -170,7 +187,29 @@ void act_on_command(char *cmd, int port, bool is_client){
 		log_success(my_command.c_str(), buffer);
 		break;
 	case LOGIN:
-	
+		if(command_chunks.size() != 3){
+			log_error(my_command.c_str());
+			return;
+		} else if(!is_valid_ip(command_chunks[1]) || !is_number(command_chunks[2].c_str())){
+			log_error(my_command.c_str());
+			return;
+		}
+
+		server_port = atoi(command_chunks[2].c_str());
+		if(server_port < 1 || server_port > 65535){
+			log_error(my_command.c_str());
+			return;
+		}
+
+		server_addr.sin_family = AF_INET;
+    	server_addr.sin_addr.s_addr = inet_addr(command_chunks[1].c_str());
+    	server_addr.sin_port = htons(server_port);
+		if(connect(client_fd, (struct sockaddr*) &server_addr, sizeof server_addr) != 0){
+			log_error(my_command.c_str());
+			return;
+		} else{
+			log_success(my_command.c_str(), buffer);
+		}
 		break;
 	default:
 		break;
@@ -252,7 +291,7 @@ void start_server(int port)
 							exit(-1);
 						
 						cmd[strcspn(cmd, "\n")] = '\0';
-						act_on_command(cmd, port, false);
+						act_on_command(cmd, port, false, -1);
 						printf("\nI got: %s\n", cmd);
 						
 						//Process PA1 commands here ...
@@ -355,7 +394,7 @@ int start_client(int port)
 							exit(-1);
 						
 						cmd[strcspn(cmd, "\n")] = '\0';
-						act_on_command(cmd, port, true);
+						act_on_command(cmd, port, true, client_fd);
 						printf("\nI got: %s\n", cmd);
 						
 						//Process PA1 commands here ...
