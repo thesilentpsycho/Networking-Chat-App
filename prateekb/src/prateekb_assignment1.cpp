@@ -21,6 +21,7 @@
  * This contains the main function. Add further description here....
  */
 #include <iostream>
+#include <vector>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -51,7 +52,13 @@ enum Command
     IP,
     AUTHOR,
     PORT,
-	LIST
+	LIST,
+	LOGIN
+};
+
+enum NodeType{
+	CLIENT,
+	SERVER
 };
 
 struct CommandMap : public std::map<std::string, Command>
@@ -62,6 +69,7 @@ struct CommandMap : public std::map<std::string, Command>
         this->operator[]("AUTHOR") = AUTHOR;
         this->operator[]("PORT") = PORT;
 		this->operator[]("LIST") = LIST;
+		this->operator[]("LOGIN") = LOGIN;
     };
     ~CommandMap(){}
 };
@@ -106,12 +114,27 @@ int whats_my_ip(char *str)
     return 1;
 }
 
-void act_on_command(char *cmd, int port){
+vector<string> split(string str, string token){
+    vector<string>result;
+    while(str.size()){
+        int index = str.find(token);
+        if(index!=string::npos){
+            result.push_back(str.substr(0,index));
+            str = str.substr(index+token.size());
+            if(str.size()==0)result.push_back(str);
+        }else{
+            result.push_back(str);
+            str = "";
+        }
+    }
+    return result;
+}
+
+void act_on_command(char *cmd, int port, bool is_client){
 	char buffer [10000];
-	string my_command = std::string(cmd);
-	if (!my_command.empty() && my_command[my_command.length()-1] == '\n') {
-    	my_command.erase(my_command.length()-1);
-	}
+	vector<string> command_chunks = split(std::string(cmd), " ");
+	string my_command = command_chunks[0];
+
 	CommandMap map = CommandMap();
 	Command command;
 	if(map.count(my_command)){
@@ -145,6 +168,9 @@ void act_on_command(char *cmd, int port){
 	case PORT:
 		sprintf(buffer, "PORT:%d\n", port);
 		log_success(my_command.c_str(), buffer);
+		break;
+	case LOGIN:
+	
 		break;
 	default:
 		break;
@@ -225,7 +251,8 @@ void start_server(int port)
 						if(fgets(cmd, CMD_SIZE-1, stdin) == NULL) //Mind the newline character that will be written to cmd
 							exit(-1);
 						
-						act_on_command(cmd, port);
+						cmd[strcspn(cmd, "\n")] = '\0';
+						act_on_command(cmd, port, false);
 						printf("\nI got: %s\n", cmd);
 						
 						//Process PA1 commands here ...
@@ -274,34 +301,6 @@ void start_server(int port)
 			}
 		}
 	}
-}
-
-int connect_to_host(char *server_ip, char* server_port)
-{
-	int fdsocket;
-	struct addrinfo hints, *res;
-
-	/* Set up hints structure */	
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_STREAM;
-
-	/* Fill up address structures */	
-	if (getaddrinfo(server_ip, server_port, &hints, &res) != 0)
-		perror("getaddrinfo failed");
-
-	/* Socket */
-	fdsocket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-	if(fdsocket < 0)
-		perror("Failed to create socket");
-	
-	/* Connect */
-	if(connect(fdsocket, res->ai_addr, res->ai_addrlen) < 0)
-		perror("Connect failed");
-	
-	freeaddrinfo(res);
-
-	return fdsocket;
 }
 
 
@@ -355,7 +354,8 @@ int start_client(int port)
 						if(fgets(cmd, CMD_SIZE-1, stdin) == NULL) //Mind the newline character that will be written to cmd
 							exit(-1);
 						
-						act_on_command(cmd, port);
+						cmd[strcspn(cmd, "\n")] = '\0';
+						act_on_command(cmd, port, true);
 						printf("\nI got: %s\n", cmd);
 						
 						//Process PA1 commands here ...
