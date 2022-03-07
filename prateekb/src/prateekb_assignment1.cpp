@@ -69,9 +69,9 @@ enum NodeType{
 
 struct Client{
     int id;
-    string *ip;
+    string ip;
     int client_fd;
-    string *hostname;
+    string hostname;
 	int port_no;
     int login_status;	//1 = in	0 = out
     int count_received;
@@ -315,6 +315,40 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 	free(msg);
 }
 
+void add_new_client(int client_fd, struct sockaddr_in client_addr){
+	char ip[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &(client_addr.sin_addr), ip, INET_ADDRSTRLEN);
+	string client_ip(ip);
+
+	bool found = false;
+	for (auto it = begin (client_list); it != end (client_list); ++it) {
+    	if(it->ip == client_ip){
+			found = true;
+			it->port_no = ntohs(client_addr.sin_port);
+			it->client_fd = client_fd;
+			it->login_status = 1;
+		}
+	}
+
+	struct hostent *hostname = NULL;
+	hostname = gethostbyaddr(&(client_addr.sin_addr), sizeof(client_addr.sin_addr), AF_INET);
+	string client_hostname(hostname->h_name);
+
+	if(!found){
+		Client c = {
+			client_list.size() + 1, 
+			client_ip, 
+			client_fd, 
+			client_hostname,
+			ntohs(client_addr.sin_port),
+			1,
+			0,
+			0
+		};
+		client_list.push_back(c);
+	}
+}
+
 
 void start_server(int port)
 {
@@ -401,7 +435,7 @@ void start_server(int port)
 						if(fdaccept < 0)
 							perror("Accept failed.");
 						
-						printf("[%s:%u] > ", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+						add_new_client(fdaccept, client_addr);
 						printf("\nRemote Host connected!\n");                        
 						
 						/* Add to watched socket list */
