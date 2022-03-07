@@ -42,6 +42,7 @@ using namespace std;
 #define STDIN 0
 #define TRUE 1
 #define CMD_SIZE 100
+#define MSG_SIZE 256
 #define BUFFER_SIZE 256
 #define UDP_PORT 53
 
@@ -266,6 +267,81 @@ void start_server(char **argv)
 					}
 				}
 			}
+		}
+	}
+}
+
+int connect_to_host(char *server_ip, char* server_port)
+{
+	int fdsocket;
+	struct addrinfo hints, *res;
+
+	/* Set up hints structure */	
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+
+	/* Fill up address structures */	
+	if (getaddrinfo(server_ip, server_port, &hints, &res) != 0)
+		perror("getaddrinfo failed");
+
+	/* Socket */
+	fdsocket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+	if(fdsocket < 0)
+		perror("Failed to create socket");
+	
+	/* Connect */
+	if(connect(fdsocket, res->ai_addr, res->ai_addrlen) < 0)
+		perror("Connect failed");
+	
+	freeaddrinfo(res);
+
+	return fdsocket;
+}
+
+
+int start_client(char **argv)
+{	
+	struct sockaddr_in client;
+	socklen_t clientsz = sizeof(client);
+
+	int server;
+	char* server_ip;
+	char* server_port;
+
+	server = connect_to_host(server_ip, server_port);
+
+	//getting client-side socket details
+	getsockname(server, (struct sockaddr *) &client, &clientsz);
+	uint client_port = ntohs(client.sin_port);
+	std::cout<< "Port-->"<<client_port<<std::endl;
+	char buffer[20];
+	sprintf(buffer, "%u", client_port);
+	log_success("PORT", buffer);
+
+	while(TRUE){
+		printf("\n[PA1-Client@CSE489/589]$ ");
+		fflush(stdout);
+		
+		char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
+		memset(msg, '\0', MSG_SIZE);
+		if(fgets(msg, MSG_SIZE-1, stdin) == NULL) //Mind the newline character that will be written to msg
+			exit(-1);
+		
+		// printf("I got: %s(size:%d chars)", msg, strlen(msg));
+		
+		printf("\nSENDing it to the remote server ... ");
+		if(send(server, msg, strlen(msg), 0) == strlen(msg))
+			printf("Done!\n");
+		fflush(stdout);
+		
+		/* Initialize buffer to receieve response */
+		char *buffer = (char*) malloc(sizeof(char)*BUFFER_SIZE);
+		memset(buffer, '\0', BUFFER_SIZE);
+		
+		if(recv(server, buffer, BUFFER_SIZE, 0) >= 0){
+			printf("Server responded: %s", buffer);
+			fflush(stdout);
 		}
 	}
 }
