@@ -76,44 +76,34 @@ void log_error(const char* command_str){
 	cse4589_print_and_log("[%s:END]\n", command_str);
 }
 
-char* getIP(){
-	char buffer[100];
-    int sockfd, n;
-    struct sockaddr_in servaddr;
-      
-    // clear servaddr
-    bzero(&servaddr, sizeof(servaddr));
-    servaddr.sin_addr.s_addr = inet_addr("8.8.8.8");
-    servaddr.sin_port = htons(UDP_PORT);
-    servaddr.sin_family = AF_INET;
-
-    // create datagram socket
-    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-      
-    // connect to server
-    if(connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0)
+int whats_my_ip(char *str)
+{
+    struct sockaddr_in udp;
+    int temp_udp =socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    int len = sizeof(udp);
+    
+    if (temp_udp == -1)
     {
-        printf("\n Error : Connect Failed \n");
-        exit(0);
+        return 0;
     }
-
-	struct sockaddr_storage remoteaddr; // client address
-    socklen_t addrlen;
-	getsockname(sockfd, (struct sockaddr*)&remoteaddr, &addrlen);
-
-	char remoteIP[INET6_ADDRSTRLEN];
-	if (remoteaddr.ss_family == AF_INET) {
-        struct sockaddr_in *s = (struct sockaddr_in *)&remoteaddr;
-        inet_ntop(AF_INET, &s->sin_addr, remoteIP, addrlen);
+    
+    memset((char *) &udp, 0, sizeof(udp));
+    udp.sin_family = AF_INET;
+    udp.sin_port = htons(UDP_PORT);
+    inet_pton(AF_INET, "8.8.8.8", &udp.sin_addr);
+    
+    if (connect(temp_udp, (struct sockaddr *)&udp, sizeof(udp)) < 0)
+    {
+        return 0;
     }
-	printf("IP_ADDRESS:%s", remoteIP);
-
-	char *ip_addr;
-	strcpy(ip_addr, remoteIP);
-
-	return ip_addr;
+    if (getsockname(temp_udp,(struct sockaddr *)&udp,(unsigned int*) &len) == -1)
+    {
+        return 0;
+    }
+    
+    inet_ntop(AF_INET, &(udp.sin_addr), str, len);
+    return 1;
 }
-
 
 void act_on_command(char *cmd){
 	char buffer [10000];
@@ -131,6 +121,7 @@ void act_on_command(char *cmd){
 	}
 
 	char* ip_addr;
+	int ip_success = 0;
 
 	switch (command)
 	{
@@ -140,9 +131,14 @@ void act_on_command(char *cmd){
 		log_success(my_command.c_str(), buffer);
 		break;
 	case IP:
-		ip_addr = getIP();
-		sprintf(buffer, "IP:%s\n", ip_addr);
-		log_success(my_command.c_str(), buffer);
+		char ip_str[INET_ADDRSTRLEN];
+		ip_success = whats_my_ip(ip_str);
+		if(ip_success == 1) {
+			sprintf(buffer, "IP:%s\n", ip_str);
+			log_success(my_command.c_str(), buffer);
+		} else {
+			log_error(my_command.c_str());
+		}
 		break;
 	default:
 		break;
