@@ -57,7 +57,9 @@ enum Command
 	LIST,
 	LOGIN,
 	SEND,
-	BROADCAST
+	BROADCAST,
+	BLOCK,
+	UNBLOCK
 };
 
 enum NodeType{
@@ -76,6 +78,9 @@ struct CommandMap : public std::map<std::string, Command>
 		this->operator[]("LOGIN") = LOGIN;
 		this->operator[]("SEND") = SEND;
 		this->operator[]("BROADCAST") = BROADCAST;
+		this->operator[]("BLOCK") = BLOCK;
+		this->operator[]("UNBLOCK") = UNBLOCK;
+
     };
     ~CommandMap(){}
 };
@@ -229,11 +234,55 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 			log_error(my_command.c_str());
 			return;
 		}
-		command_chunks[1];
 		copy(command_chunks.begin() + 2, command_chunks.end(),
            ostream_iterator<std::string>(concatenated, " "));
 
 		encoded_data = "SEND_ONE::::" + command_chunks[1] + "::::" + concatenated.str();
+		memset(msg, '\0', MSG_SIZE);
+		strcpy(msg, encoded_data.c_str());
+
+		if(send(client_fd, msg, strlen(msg), 0) == strlen(msg))
+			log_success(my_command.c_str(), buffer);
+		break;
+	case BROADCAST:
+		if(command_chunks.size() < 2){
+			log_error(my_command.c_str());
+			return;
+		}
+		copy(command_chunks.begin() + 1, command_chunks.end(),
+           ostream_iterator<std::string>(concatenated, " "));
+
+		encoded_data = "SEND_ALL::::" + concatenated.str();
+		memset(msg, '\0', MSG_SIZE);
+		strcpy(msg, encoded_data.c_str());
+
+		if(send(client_fd, msg, strlen(msg), 0) == strlen(msg))
+			log_success(my_command.c_str(), buffer);
+		break;
+	case BLOCK:
+		if(command_chunks.size() < 2){
+			log_error(my_command.c_str());
+			return;
+		}
+		copy(command_chunks.begin() + 1, command_chunks.end(),
+           ostream_iterator<std::string>(concatenated, " "));
+
+		encoded_data = "BLOCK::::" + concatenated.str();
+		memset(msg, '\0', MSG_SIZE);
+		strcpy(msg, encoded_data.c_str());
+
+		if(send(client_fd, msg, strlen(msg), 0) == strlen(msg))
+			log_success(my_command.c_str(), buffer);
+		break;
+	case UNBLOCK:
+		if(command_chunks.size() < 2){
+			log_error(my_command.c_str());
+			return;
+		}
+		copy(command_chunks.begin() + 1, command_chunks.end(),
+           ostream_iterator<std::string>(concatenated, " "));
+
+		encoded_data = "UNBLOCK::::" + concatenated.str();
 		memset(msg, '\0', MSG_SIZE);
 		strcpy(msg, encoded_data.c_str());
 
