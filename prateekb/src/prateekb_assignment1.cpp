@@ -98,7 +98,7 @@ struct Message {
 };
 
 // Taking some globals I disapprove usually.
-std::vector<Message> all_messages;
+std::vector<Message> pending_messages;
 std::vector<Client> client_list;
 std::vector<Block> block_list;
 
@@ -199,6 +199,25 @@ vector<Client> get_logged_in_clients(){
 			result.push_back(c);
 	}
 	return result;
+}
+
+Client* find_client(string& client_ip){
+	for (auto& c : client_list){
+		if (c.ip == client_ip)
+			return &c;
+	}
+	return nullptr;
+}
+
+bool is_logged_in(string client_ip){
+	Client* client = find_client(client_ip);
+	if(client){
+		if(client->login_status == 1){
+			return true;
+		}
+	}
+
+	return false;
 }
 
 void act_on_command(char *cmd, int port, bool is_client, int client_fd){
