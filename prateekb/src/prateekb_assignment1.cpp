@@ -528,8 +528,11 @@ void start_server(int port)
 							
 							printf("\nClient sent me: %s\n", buffer);
 							printf("ECHOing it back to the remote host ... ");
-							if(send(fdaccept, buffer, strlen(buffer), 0) == strlen(buffer))
+							if(send(fdaccept, buffer, strlen(buffer), 0) == strlen(buffer)){
 								printf("Done!\n");
+							} else{
+								printf("Bad Bytes!\n");
+							}
 							fflush(stdout);
 						}
 						
@@ -562,72 +565,54 @@ int start_client(int port)
 		exit(EXIT_FAILURE);		//fatal
 	}
 
-	fd_set master_list, watch_list;
-	int cmax = 0, select_result, sock_index;
+	int select_result, sock_index;
 
+	fd_set master_list, watch_list;
 	FD_ZERO(&master_list);
 	FD_ZERO(&watch_list);
 	FD_SET(client_fd, &master_list);
 	FD_SET(STDIN, &master_list);
 	
-	int head_socket = client_fd;
-	char receive_buf[1024];
+	char receive_buf[512];
 
 	while(TRUE) {
 		memcpy(&watch_list, &master_list, sizeof(master_list));
-		
-		select_result = select(head_socket + 1, &watch_list, NULL, NULL, NULL);
-		if(select_result < 0)
-			perror("select failed.");
-		
-		/* Check if we have server message/STDIN to process */
-		if(select_result > 0){
-			/* Loop through socket descriptors to check which ones are ready */
-			for(sock_index=0; sock_index<=head_socket; sock_index+=1){
-				
-				if(FD_ISSET(sock_index, &watch_list)){
-					
-					/* Check if new command on STDIN */
-					if (sock_index == STDIN){
-						char *cmd = (char*) malloc(sizeof(char)*CMD_SIZE);
-						
-						memset(cmd, '\0', CMD_SIZE);
-						if(fgets(cmd, CMD_SIZE-1, stdin) == NULL) //Mind the newline character that will be written to cmd
-							exit(-1);
-						
-						cmd[strcspn(cmd, "\n")] = '\0';
-						act_on_command(cmd, port, true, client_fd);
-						printf("\nI got: %s\n", cmd);
-						
-						//Process PA1 commands here ...
-						
-						free(cmd);
-					}
-					/* Check if server has sent something */
-					else if(sock_index == client_fd) {
-						memset(receive_buf, 0, sizeof receive_buf);
 
-						if(recv(client_fd, &receive_buf, sizeof receive_buf, 0) > 0) {
-							vector<string> parts = split(receive_buf, "::::");
-							string command = parts[0];
-							if(command == "MSG") {
-								char temp_buf[sizeof receive_buf];
-								string disp_command = "RECEIVED";
-								sprintf(temp_buf, "msg from:%s\n[msg]:%s\n",
-								parts[1].c_str(), parts[2].c_str());
-								log_success(disp_command.c_str(), temp_buf);
-							}
-						}
-					}
-					/* Read from existing clients */
-					else{
-						/* Initialize buffer to receieve response */
-						
+		select_result = select(client_fd + 1, &watch_list, NULL, NULL, NULL);
+
+		if(select_result > 0){
+			if(FD_ISSET(STDIN, &watch_list)) {
+				/* we have new msg on STDIN to process */
+					char *cmd = (char*) malloc(sizeof(char)*CMD_SIZE);
+					
+					memset(cmd, '\0', CMD_SIZE);
+					if(fgets(cmd, CMD_SIZE-1, stdin) == NULL) //Mind the newline character that will be written to cmd
+						exit(-1);
+					
+					cmd[strcspn(cmd, "\n")] = '\0';
+					act_on_command(cmd, port, true, client_fd);
+
+					free(cmd);
+			} else if(FD_ISSET(client_fd, &watch_list)) {
+				memset(receive_buf, 0, sizeof receive_buf);
+				
+				int val = recv(client_fd, &receive_buf, sizeof receive_buf, 0);
+				if(val >= 0) {
+					cout<<"recv val:"<<val<<std::endl;
+					vector<string> parts = split(receive_buf, "::::");
+					string command = parts[0];
+					if(command == "MSG") {
+						char temp_buf[sizeof receive_buf];
+						string disp_command = "RECEIVED";
+						sprintf(temp_buf, "msg from:%s\n[msg]:%s\n",
+						parts[1].c_str(), parts[2].c_str());
+						log_success(disp_command.c_str(), temp_buf);
 					}
 				}
 			}
 		}
 	}
+	
 	close(client_fd);
 }
 
