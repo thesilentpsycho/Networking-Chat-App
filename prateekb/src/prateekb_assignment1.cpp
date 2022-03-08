@@ -21,6 +21,7 @@
  * This contains the main function. Add further description here....
  */
 #include <iostream>
+#include <algorithm>
 #include <vector>
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,13 +63,12 @@ enum Command
 	UNBLOCK
 };
 
-enum NodeType{
+enum NodeType {
 	CLIENT,
 	SERVER
 };
 
-struct Client{
-    int id;
+struct Client {
     string ip;
     int client_fd;
     string hostname;
@@ -76,6 +76,12 @@ struct Client{
     int login_status;	//1 = in	0 = out
     int count_received;
     int count_sent;
+
+	// to sort based on port. often used.
+	bool operator<(const Client& a) const
+    {
+        return port_no < a.port_no;
+    }
 };
 
 struct Block{
@@ -83,6 +89,19 @@ struct Block{
 	string blocked;
 };
 
+enum MessageState {
+	PENDING,
+	DELIVERED
+};
+
+struct Message {
+	string from;
+	string to;
+	string msg;
+	MessageState state;
+};
+
+std::vector<Message> all_message_list;
 std::vector<Client> client_list;
 std::vector<Block> block_list;
 
@@ -175,6 +194,15 @@ bool is_number(const std::string& str)
     return !str.empty() && it == str.end();
 }
 
+vector<Client> get_logged_in_clients(){
+	std::vector<Client> result;
+	for (auto& c : client_list){
+		if (c.login_status == 1)
+			result.push_back(c);
+	}
+	return result;
+}
+
 void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 	char buffer [10000];
 	char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
@@ -197,6 +225,7 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 	int server_port;
 	ostringstream concatenated;
 	string encoded_data;
+	vector<Client> logged_in_clients;
 
 	switch (command)
 	{
@@ -308,6 +337,16 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		if(send(client_fd, msg, strlen(msg), 0) == strlen(msg))
 			log_success(my_command.c_str(), buffer);
 		break;
+	case LIST:
+		logged_in_clients = get_logged_in_clients();
+		std::sort(logged_in_clients.begin(), logged_in_clients.end());
+		cse4589_print_and_log("[%s:SUCCESS]\n", my_command.c_str());
+		for (int index = 0; index < logged_in_clients.size(); ++index){
+			cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", 
+			index + 1, logged_in_clients[index].hostname,
+			logged_in_clients[index].ip, logged_in_clients[index].port_no);	
+		}
+		cse4589_print_and_log("[%s:END]\n", my_command.c_str());
 	default:
 		break;
 	}
@@ -336,7 +375,6 @@ void add_new_client(int client_fd, struct sockaddr_in client_addr){
 
 	if(!found){
 		Client c = {
-			client_list.size() + 1, 
 			client_ip, 
 			client_fd, 
 			client_hostname,
