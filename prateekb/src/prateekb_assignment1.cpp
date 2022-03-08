@@ -60,7 +60,8 @@ enum Command
 	SEND,
 	BROADCAST,
 	BLOCK,
-	UNBLOCK
+	UNBLOCK,
+	STATISTICS
 };
 
 enum NodeType {
@@ -89,19 +90,15 @@ struct Block{
 	string blocked;
 };
 
-enum MessageState {
-	PENDING,
-	DELIVERED
-};
-
 struct Message {
+	int id;
 	string from;
 	string to;
 	string msg;
-	MessageState state;
 };
 
-std::vector<Message> all_message_list;
+// Taking some globals I disapprove usually.
+std::vector<Message> all_messages;
 std::vector<Client> client_list;
 std::vector<Block> block_list;
 
@@ -118,6 +115,7 @@ struct CommandMap : public std::map<std::string, Command>
 		this->operator[]("BROADCAST") = BROADCAST;
 		this->operator[]("BLOCK") = BLOCK;
 		this->operator[]("UNBLOCK") = UNBLOCK;
+		this->operator[]("STATISTICS") = STATISTICS;
 
     };
     ~CommandMap(){}
@@ -347,6 +345,18 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 			logged_in_clients[index].ip, logged_in_clients[index].port_no);	
 		}
 		cse4589_print_and_log("[%s:END]\n", my_command.c_str());
+		break;
+	case STATISTICS:
+		std::sort(client_list.begin(), client_list.end());
+		cse4589_print_and_log("[%s:SUCCESS]\n", my_command.c_str());
+		for (int index = 0; index < client_list.size(); ++index) {
+			cse4589_print_and_log("%-5d%-35s%-8d%-8d%-8s\n",
+			index + 1, client_list[index].hostname,
+			client_list[index].count_sent, client_list[index].count_received,
+			client_list[index].login_status == 1 ? "logged-in": "logged-out");	
+		}
+		cse4589_print_and_log("[%s:END]\n", my_command.c_str());
+		break;
 	default:
 		break;
 	}
