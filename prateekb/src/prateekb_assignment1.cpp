@@ -101,6 +101,8 @@ struct Message {
 std::vector<Message> pending_messages;
 std::vector<Client> client_list;
 std::vector<Block> block_list;
+//local copy of client
+std::vector<string> c_client_list;
 
 struct CommandMap : public std::map<std::string, Command>
 {
@@ -130,6 +132,12 @@ void log_success(const char* command_str, const char* msg){
 void log_error(const char* command_str){
 	cse4589_print_and_log("[%s:ERROR]\n", command_str);
 	cse4589_print_and_log("[%s:END]\n", command_str);
+}
+
+void log_relay_message(string from, string msg){
+	cse4589_print_and_log("[%s:SUCCESS]\n", "RECEIVED");
+	cse4589_print_and_log("msg from:%s\n[msg]:%s\n", from.c_str(), msg.c_str());
+	cse4589_print_and_log("[%s:END]\n", "RECEIVED");
 }
 
 int whats_my_ip(char *str)
@@ -220,6 +228,13 @@ bool is_logged_in(string client_ip){
 	return false;
 }
 
+string concat(vector<string> vec, string delimiter){
+	ostringstream concatenated;
+	copy(vec.begin(), vec.end(),
+           ostream_iterator<std::string>(concatenated, delimiter.c_str()));
+	return concatenated.str();
+}
+
 void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 	char buffer [10000];
 	char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
@@ -287,9 +302,34 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		if(connect(client_fd, (struct sockaddr*) &server_addr, sizeof server_addr) != 0){
 			log_error(my_command.c_str());
 			return;
-		} else{
-			log_success(my_command.c_str(), buffer);
 		}
+		//receive logged-in client details
+		char temp[512];
+		if(recv(client_fd, &temp, sizeof temp, 0) > 0){
+			string dat(temp);
+			vector<string> clients = split(dat, "::::");
+			if(clients.size() >= 1){
+				c_client_list = split(clients[0], "$$");
+			}
+		}
+
+		//pull pending messages one by one
+		uint32_t un;
+		if(recv(client_fd, &un, sizeof(uint32_t), 0) >= 0){
+			int total = ntohl(un);
+			for (int i = 1; i <= total; i++)
+			{
+				char temp[512];
+				if(recv(client_fd, &temp, sizeof temp, 0) > 0){
+					string dat(temp);
+					vector<string> mess = split(dat, "$$");
+					log_relay_message(mess[0], mess[1]);
+				}
+			}
+		}
+
+
+		log_success(my_command.c_str(), buffer);
 		break;
 	case SEND:
 		if(command_chunks.size() < 3){
@@ -416,6 +456,17 @@ void add_new_client(int client_fd, struct sockaddr_in client_addr){
 	}
 }
 
+vector<Message> filter_pending_messages(string to_ip){
+	vector<Message> result;
+	for(auto& m:pending_messages){
+		if(m.to == to_ip){
+			result.push_back(m);
+		}
+	}
+
+	return result;
+}
+
 
 void start_server(int port)
 {
@@ -503,6 +554,37 @@ void start_server(int port)
 							perror("Accept failed.");
 						
 						add_new_client(fdaccept, client_addr);
+
+						//sending logged in user addresses to new client
+						vector<Client> clients = get_logged_in_clients();
+						vector<string> clientIPs;
+						for (auto& c : clients){
+							clientIPs.push_back(c.ip);
+						}
+						string data = concat(clientIPs, "$$");
+						char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
+						memset(msg, '\0', MSG_SIZE);
+						strcpy(msg, data.c_str());
+						send(fdaccept, msg, strlen(msg), 0);
+
+						//send number of pending messages for this client
+						memset(msg, '\0', MSG_SIZE);
+						char ip[INET_ADDRSTRLEN];
+						inet_ntop(AF_INET, &(client_addr.sin_addr), ip, INET_ADDRSTRLEN);
+						string client_ip(ip);
+						vector<Message> messages = filter_pending_messages(client_ip);
+						uint32_t un = htonl(messages.size());
+						if(send(fdaccept, &un, sizeof(uint32_t), 0) == sizeof(uint32_t)){
+							// send pending messages one by one
+							for(auto& m: messages){
+								string encoded_data = m.from + "$$" + m.msg;
+								memset(msg, '\0', MSG_SIZE);
+								strcpy(msg, encoded_data.c_str());
+								send(fdaccept, msg, strlen(msg), 0);
+							}
+						}
+
+						free(msg);
 						printf("\nRemote Host connected!\n");                        
 						
 						/* Add to watched socket list */
@@ -586,7 +668,7 @@ int start_client(int port)
 					char *cmd = (char*) malloc(sizeof(char)*CMD_SIZE);
 					
 					memset(cmd, '\0', CMD_SIZE);
-					if(fgets(cmd, CMD_SIZE-1, stdin) == NULL) //Mind the newline character that will be written to cmd
+					if(fgets(cmd, CMD_SIZE-1, stdin) == NULL)
 						exit(-1);
 					
 					cmd[strcspn(cmd, "\n")] = '\0';
