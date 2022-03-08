@@ -569,6 +569,7 @@ int start_client(int port)
 	FD_SET(STDIN, &master_list);
 	
 	int head_socket = client_fd;
+	char receive_buf[1024];
 
 	while(TRUE) {
 		memcpy(&watch_list, &master_list, sizeof(master_list));
@@ -601,8 +602,20 @@ int start_client(int port)
 						free(cmd);
 					}
 					/* Check if server has sent something */
-					else if(sock_index == client_fd){
-						
+					else if(sock_index == client_fd) {
+						if(recv(client_fd, &receive_buf, 1024, 0) > 0) {
+							vector<string> parts = split(receive_buf, "::::");
+							string command = parts[0];
+							if(command == "MSG") {
+								char temp_buf[1024];
+								string disp_command = "RECEIVED";
+								string from = parts[1];
+								string msg = parts[2];
+								sprintf(temp_buf, "msg from:%s\n[msg]:%s\n",
+								parts[1].c_str(), parts[2].c_str());
+								log_success(disp_command.c_str(), temp_buf);
+							}
+						}
 					}
 					/* Read from existing clients */
 					else{
@@ -612,24 +625,7 @@ int start_client(int port)
 				}
 			}
 		}
-		
 	}
-
-	// socklen_t clientsz = sizeof(client);
-
-	int server;
-	char* server_ip;
-	char* server_port;
-
-	// server = connect_to_host(server_ip, server_port);
-
-	//getting client-side socket details
-	// getsockname(server, (struct sockaddr *) &client, &clientsz);
-	// uint client_port = ntohs(client.sin_port);
-	// std::cout<< "Port-->"<<client_port<<std::endl;
-	// char buffer[20];
-	// sprintf(buffer, "%u", client_port);
-	// log_success("PORT", buffer);
 }
 
 /**
