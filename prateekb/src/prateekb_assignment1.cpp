@@ -539,6 +539,8 @@ void start_server(int port)
 			}
 		}
 	}
+
+	close(server_socket);
 }
 
 
@@ -626,6 +628,7 @@ int start_client(int port)
 			}
 		}
 	}
+	close(client_fd);
 }
 
 /**
