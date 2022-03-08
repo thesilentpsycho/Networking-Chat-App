@@ -603,14 +603,14 @@ int start_client(int port)
 					}
 					/* Check if server has sent something */
 					else if(sock_index == client_fd) {
-						if(recv(client_fd, &receive_buf, 1024, 0) > 0) {
+						memset(receive_buf, 0, sizeof receive_buf);
+
+						if(recv(client_fd, &receive_buf, sizeof receive_buf, 0) > 0) {
 							vector<string> parts = split(receive_buf, "::::");
 							string command = parts[0];
 							if(command == "MSG") {
-								char temp_buf[1024];
+								char temp_buf[sizeof receive_buf];
 								string disp_command = "RECEIVED";
-								string from = parts[1];
-								string msg = parts[2];
 								sprintf(temp_buf, "msg from:%s\n[msg]:%s\n",
 								parts[1].c_str(), parts[2].c_str());
 								log_success(disp_command.c_str(), temp_buf);
