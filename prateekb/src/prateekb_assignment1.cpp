@@ -401,9 +401,9 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		std::sort(logged_in_clients.begin(), logged_in_clients.end());
 		cse4589_print_and_log("[%s:SUCCESS]\n", my_command.c_str());
 		for (int index = 0; index < logged_in_clients.size(); ++index){
-			// cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", 
-			// index + 1, logged_in_clients[index].hostname,
-			// logged_in_clients[index].ip, logged_in_clients[index].port_no);	
+			cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", 
+			index + 1, logged_in_clients[index].hostname.c_str(),
+			logged_in_clients[index].ip.c_str(), logged_in_clients[index].port_no);
 		}
 		cse4589_print_and_log("[%s:END]\n", my_command.c_str());
 		break;
