@@ -103,6 +103,8 @@ std::vector<Client> client_list;
 std::vector<Block> block_list;
 //local copy of client
 std::vector<string> c_client_list;
+const char* LOGGEDIN = "logged-in";
+const char* LOGGEDOUT = "logged-out";
 
 struct CommandMap : public std::map<std::string, Command>
 {
@@ -399,9 +401,9 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		std::sort(logged_in_clients.begin(), logged_in_clients.end());
 		cse4589_print_and_log("[%s:SUCCESS]\n", my_command.c_str());
 		for (int index = 0; index < logged_in_clients.size(); ++index){
-			cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", 
-			index + 1, logged_in_clients[index].hostname,
-			logged_in_clients[index].ip, logged_in_clients[index].port_no);	
+			// cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", 
+			// index + 1, logged_in_clients[index].hostname,
+			// logged_in_clients[index].ip, logged_in_clients[index].port_no);	
 		}
 		cse4589_print_and_log("[%s:END]\n", my_command.c_str());
 		break;
@@ -409,10 +411,10 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		std::sort(client_list.begin(), client_list.end());
 		cse4589_print_and_log("[%s:SUCCESS]\n", my_command.c_str());
 		for (int index = 0; index < client_list.size(); ++index) {
-			cse4589_print_and_log("%-5d%-35s%-8d%-8d%-8s\n",
-			index + 1, client_list[index].hostname,
-			client_list[index].count_sent, client_list[index].count_received,
-			client_list[index].login_status == 1 ? "logged-in": "logged-out");	
+			// cse4589_print_and_log("%-5d%-35s%-8d%-8d%-8s\n",
+			// index + 1, client_list[index].hostname,
+			// client_list[index].count_sent, client_list[index].count_received,
+			// client_list[index].login_status == 1 ? LOGGEDIN: LOGGEDOUT);	
 		}
 		cse4589_print_and_log("[%s:END]\n", my_command.c_str());
 		break;

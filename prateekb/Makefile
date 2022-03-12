@@ -8,7 +8,7 @@ OBJ_PATH  = $(patsubst $(SRC_DIR)/%,$(OBJ_DIR)/%,$(OBJ_FILES))
 
 LIBS	= 
 CC	= /usr/bin/g++
-CFLAGS	= -g -I$(INC_DIR)
+CFLAGS	= -g -I$(INC_DIR) -std=c++11
 
 all: assignment1
 
