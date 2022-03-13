@@ -272,19 +272,6 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 
 	switch (command)
 	{
-	case LOGOUT:
-		if(!is_client){
-			log_error(my_command.c_str());
-			return;
-		}
-		encoded_data = "LOGOUT";
-		memset(msg, '\0', MSG_SIZE);
-		strcpy(msg, encoded_data.c_str());
-
-		if(send(client_fd, msg, strlen(msg), 0) == strlen(msg))
-			log_success(my_command.c_str(), buffer);
-		memset(msg, '\0', MSG_SIZE);
-		break;
 	case AUTHOR:
 		sprintf(buffer, "I, %s, have read and understood the course academic integrity policy.\n",
 		"prateekb");
@@ -648,10 +635,15 @@ void start_server(int port)
 						
 						if(recv(sock_index, buffer, BUFFER_SIZE, 0) <= 0){
 							close(sock_index);
-							printf("Remote Host terminated connection!\n");
-							
 							/* Remove from watched list */
 							FD_CLR(sock_index, &master_list);
+							//set as logged out
+							for (auto it = begin (client_list); it != end (client_list); ++it) {
+								if(it->client_fd == fdaccept){
+									it->login_status = 0;
+								}
+							}
+							printf("Remote Host terminated connection!\n");
 						}
 						else {
 							//Process incoming data from existing clients here ...
@@ -659,17 +651,6 @@ void start_server(int port)
 							printf("\nClient sent me: %s\n", buffer);
 							if(send(fdaccept, buffer, strlen(buffer), 0) == strlen(buffer)){
 								string c_msg(buffer);
-								if(c_msg == "LOGOUT"){
-									close(fdaccept);
-									FD_CLR(fdaccept, &master_list);
-
-									//set as logged out
-									for (auto it = begin (client_list); it != end (client_list); ++it) {
-										if(it->client_fd == fdaccept){
-											it->login_status = 0;
-										}
-									}
-								}
 							} else{
 								printf("Bad Bytes!\n");
 							}
@@ -686,9 +667,7 @@ void start_server(int port)
 	close(server_socket);
 }
 
-
-int start_client(int port)
-{	
+int get_new_binding(int port){
 	int client_fd = 0;
 
 	client_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -696,7 +675,7 @@ int start_client(int port)
 		exit(EXIT_FAILURE);
 	}
 
-	struct sockaddr_in client_addr, server_addr;
+	struct sockaddr_in client_addr;
 	client_addr.sin_addr.s_addr = INADDR_ANY;
     client_addr.sin_family = AF_INET;
     client_addr.sin_port = htons(port);
@@ -705,6 +684,15 @@ int start_client(int port)
 		exit(EXIT_FAILURE);		//fatal
 	}
 
+	return client_fd;
+}
+
+int start_client(int port)
+{	
+	int client_fd = get_new_binding(port);
+
+	struct sockaddr_in server_addr;
+	
 	int select_result, sock_index;
 
 	fd_set master_list, watch_list;
@@ -730,6 +718,17 @@ int start_client(int port)
 						exit(-1);
 					
 					cmd[strcspn(cmd, "\n")] = '\0';
+					
+					string c_command(cmd);
+					if(c_command == "LOGOUT"){
+						close(client_fd);
+						// FD_CLR(client_fd, &master_list);
+						// // client_fd = get_new_binding(port);
+						// FD_SET(client_fd, &master_list);
+						cse4589_print_and_log("[%s:SUCCESS]\n", c_command.c_str());
+						cse4589_print_and_log("[%s:END]\n", c_command.c_str());
+						continue;
+					}
 					act_on_command(cmd, port, true, client_fd);
 
 					free(cmd);
