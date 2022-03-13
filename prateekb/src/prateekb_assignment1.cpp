@@ -640,7 +640,7 @@ void start_server(int port)
 							FD_CLR(sock_index, &master_list);
 							//set as logged out
 							for (auto it = begin (client_list); it != end (client_list); ++it) {
-								if(it->client_fd == fdaccept){
+								if(it->client_fd == sock_index){
 									it->login_status = 0;
 								}
 							}
@@ -649,11 +649,24 @@ void start_server(int port)
 						else {
 							//Process incoming data from existing clients here ...
 							
-							printf("\nClient sent me: %s\n", buffer);
-							if(send(fdaccept, buffer, strlen(buffer), 0) == strlen(buffer)){
-								string c_msg(buffer);
-							} else{
-								printf("Bad Bytes!\n");
+							string c_msg = "";
+							if(buffer){
+								c_msg = buffer;
+							}
+							cout << "Client sent me: " << c_msg << endl;
+							if(c_msg == "REFRESH") {
+								//send logged-in client details
+								vector<Client> clients = get_logged_in_clients();
+								vector<string> clientIPs;
+								for (auto& c : clients){
+									clientIPs.push_back(c.ip + "::" + c.hostname + "::" + to_string(c.port_no));
+								}
+								string data = concat(clientIPs, "$$");
+								char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
+								memset(msg, '\0', MSG_SIZE);
+								strcpy(msg, data.c_str());
+								send(sock_index, msg, strlen(msg), 0);
+								free(msg);
 							}
 							fflush(stdout);
 						}
@@ -697,7 +710,7 @@ void receive_neighbours(int client_fd){
 	char temp[512];
 	if(recv(client_fd, &temp, sizeof temp, 0) > 0){
 		string dat(temp);
-		// cout<< dat<< endl;
+		cout<< dat<< endl;
 		c_client_list.clear();
 		if(dat != ""){
 			vector<string> clients = split(dat, "::::");
@@ -734,6 +747,8 @@ int start_client(int port)
 	FD_ZERO(&master_list);
 	FD_ZERO(&watch_list);
 	FD_SET(STDIN, &master_list);
+
+	char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
 	
 	char receive_buf[512];
 
@@ -807,10 +822,18 @@ int start_client(int port)
 						cse4589_print_and_log("[%s:SUCCESS]\n", c_command[0].c_str());
 						cse4589_print_and_log("[%s:END]\n", c_command[0].c_str());
 					} else if (c_command[0] == "REFRESH") {
+						//TODO: Ask for the list from the server here
+						memset(msg, '\0', MSG_SIZE);
+						strcpy(msg, c_command[0].c_str());
 
-						receive_neighbours(client_fd);
-						cse4589_print_and_log("[%s:SUCCESS]\n", c_command[0].c_str());
-						cse4589_print_and_log("[%s:END]\n", c_command[0].c_str());
+						if(send(client_fd, msg, strlen(msg), 0) == strlen(msg)){
+							cout<< "sent refresh signal.." << endl;
+							receive_neighbours(client_fd);
+							cse4589_print_and_log("[%s:SUCCESS]\n", c_command[0].c_str());
+							cse4589_print_and_log("[%s:END]\n", c_command[0].c_str());
+						} else{
+							log_error(c_command[0].c_str());
+						}
 					} else{
 						act_on_command(cmd, port, true, client_fd);
 					}
@@ -837,6 +860,7 @@ int start_client(int port)
 	}
 	
 	close(client_fd);
+	free(msg);
 }
 
 /**
