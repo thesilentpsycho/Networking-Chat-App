@@ -102,7 +102,7 @@ std::vector<Message> pending_messages;
 std::vector<Client> client_list;
 std::vector<Block> block_list;
 //local copy of client
-std::vector<string> c_client_list;
+std::vector<Client> c_client_list;
 const char* LOGGEDIN = "logged-in";
 const char* LOGGEDOUT = "logged-out";
 
@@ -182,7 +182,7 @@ vector<string> split(string str, string token){
             if(str.size()==0)result.push_back(str);
         }else{
             result.push_back(str);
-            str = "";
+			break;
         }
     }
     return result;
@@ -231,6 +231,8 @@ bool is_logged_in(string client_ip){
 }
 
 string concat(vector<string> vec, string delimiter){
+	if(vec.size() == 0) return "";
+	if(vec.size() == 1) return vec[0];
 	ostringstream concatenated;
 	copy(vec.begin(), vec.end(),
            ostream_iterator<std::string>(concatenated, delimiter.c_str()));
@@ -309,15 +311,33 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		char temp[512];
 		if(recv(client_fd, &temp, sizeof temp, 0) > 0){
 			string dat(temp);
-			vector<string> clients = split(dat, "::::");
-			if(clients.size() >= 1){
-				c_client_list = split(clients[0], "$$");
+			cout<< dat<< endl;
+			c_client_list.clear();
+			if(dat != ""){
+				vector<string> clients = split(dat, "::::");
+				if(clients.size() >= 1){
+					// detail includes data in this format ip::hostname
+					vector<string> details = split(clients[0], "$$");
+					for(auto& d:details){
+						vector<string> curr_detail = split(d, "::");
+						Client c = {
+							curr_detail[0], 
+							-1, 
+							curr_detail[1],
+							std::stoi(curr_detail[2]),
+							1,
+							0,
+							0
+						};
+						c_client_list.push_back(c);
+					}
+				}
 			}
 		}
 
 		//pull pending messages one by one
 		uint32_t un;
-		if(recv(client_fd, &un, sizeof(uint32_t), 0) >= 0){
+		if(recv(client_fd, &un, sizeof(uint32_t), 0) > 0){
 			int total = ntohl(un);
 			for (int i = 1; i <= total; i++)
 			{
@@ -397,7 +417,7 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 			log_success(my_command.c_str(), buffer);
 		break;
 	case LIST:
-		logged_in_clients = get_logged_in_clients();
+		logged_in_clients = is_client ? c_client_list: get_logged_in_clients();
 		std::sort(logged_in_clients.begin(), logged_in_clients.end());
 		cse4589_print_and_log("[%s:SUCCESS]\n", my_command.c_str());
 		for (int index = 0; index < logged_in_clients.size(); ++index){
@@ -443,6 +463,7 @@ void add_new_client(int client_fd, struct sockaddr_in client_addr){
 	struct hostent *hostname = NULL;
 	hostname = gethostbyaddr(&(client_addr.sin_addr), sizeof(client_addr.sin_addr), AF_INET);
 	string client_hostname(hostname->h_name);
+	// string client_hostname = "chinupc";
 
 	if(!found){
 		Client c = {
@@ -557,11 +578,11 @@ void start_server(int port)
 						
 						add_new_client(fdaccept, client_addr);
 
-						//sending logged in user addresses to new client
+						//send logged-in client details
 						vector<Client> clients = get_logged_in_clients();
 						vector<string> clientIPs;
 						for (auto& c : clients){
-							clientIPs.push_back(c.ip);
+							clientIPs.push_back(c.ip + "::" + c.hostname + "::" + to_string(c.port_no));
 						}
 						string data = concat(clientIPs, "$$");
 						char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
@@ -681,7 +702,7 @@ int start_client(int port)
 				memset(receive_buf, 0, sizeof receive_buf);
 				
 				int val = recv(client_fd, &receive_buf, sizeof receive_buf, 0);
-				if(val >= 0) {
+				if(val > 0) {
 					cout<<"recv val:"<<val<<std::endl;
 					vector<string> parts = split(receive_buf, "::::");
 					string command = parts[0];
