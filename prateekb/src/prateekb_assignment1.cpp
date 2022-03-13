@@ -692,6 +692,36 @@ int get_new_binding(int port){
 	return client_fd;
 }
 
+void receive_neighbours(int client_fd){
+		//receive logged-in client details
+	char temp[512];
+	if(recv(client_fd, &temp, sizeof temp, 0) > 0){
+		string dat(temp);
+		// cout<< dat<< endl;
+		c_client_list.clear();
+		if(dat != ""){
+			vector<string> clients = split(dat, "::::");
+			if(clients.size() >= 1){
+				// detail includes data in this format ip::hostname
+				vector<string> details = split(clients[0], "$$");
+				for(auto& d:details){
+					vector<string> curr_detail = split(d, "::");
+					Client c = {
+						curr_detail[0], 
+						-1, 
+						curr_detail[1],
+						std::stoi(curr_detail[2]),
+						1,
+						0,
+						0
+					};
+					c_client_list.push_back(c);
+				}
+			}
+		}
+	}
+}
+
 int start_client(int port)
 {	
 	int client_fd = 10;
@@ -734,45 +764,29 @@ int start_client(int port)
 						continue;
 					} else if (c_command[0] == "LOGIN"){
 						cout << "direct login" << endl;
+						if(c_command.size() != 3){
+							log_error(c_command[0].c_str());
+							continue;
+						} else if(!is_valid_ip(c_command[1]) || !is_number(c_command[2].c_str())){
+							log_error(c_command[0].c_str());
+							continue;
+						}
 						int server_port = atoi(c_command[2].c_str());
+						if(server_port < 1 || server_port > 65535){
+							log_error(c_command[0].c_str());
+							continue;
+						}
+
 						server_addr.sin_family = AF_INET;
 						server_addr.sin_addr.s_addr = inet_addr(c_command[1].c_str());
 						server_addr.sin_port = htons(server_port);
 						client_fd = get_new_binding(port);
 						if(connect(client_fd, (struct sockaddr*) &server_addr, sizeof server_addr) != 0){
-							perror("socket");
-							cout << "cant connect" << endl;
-							// log_error(my_command.c_str());
+							perror("socket cant connect");
 							continue;
 						}
 						
-						//receive logged-in client details
-						char temp[512];
-						if(recv(client_fd, &temp, sizeof temp, 0) > 0){
-							string dat(temp);
-							// cout<< dat<< endl;
-							c_client_list.clear();
-							if(dat != ""){
-								vector<string> clients = split(dat, "::::");
-								if(clients.size() >= 1){
-									// detail includes data in this format ip::hostname
-									vector<string> details = split(clients[0], "$$");
-									for(auto& d:details){
-										vector<string> curr_detail = split(d, "::");
-										Client c = {
-											curr_detail[0], 
-											-1, 
-											curr_detail[1],
-											std::stoi(curr_detail[2]),
-											1,
-											0,
-											0
-										};
-										c_client_list.push_back(c);
-									}
-								}
-							}
-						}
+						receive_neighbours(client_fd);
 
 						//pull pending messages one by one
 						uint32_t un;
@@ -790,6 +804,11 @@ int start_client(int port)
 						}
 
 						FD_SET(client_fd, &master_list);
+						cse4589_print_and_log("[%s:SUCCESS]\n", c_command[0].c_str());
+						cse4589_print_and_log("[%s:END]\n", c_command[0].c_str());
+					} else if (c_command[0] == "REFRESH") {
+
+						receive_neighbours(client_fd);
 						cse4589_print_and_log("[%s:SUCCESS]\n", c_command[0].c_str());
 						cse4589_print_and_log("[%s:END]\n", c_command[0].c_str());
 					} else{
