@@ -57,6 +57,7 @@ enum Command
     PORT,
 	LIST,
 	LOGIN,
+	LOGOUT,
 	SEND,
 	BROADCAST,
 	BLOCK,
@@ -115,6 +116,7 @@ struct CommandMap : public std::map<std::string, Command>
         this->operator[]("PORT") = PORT;
 		this->operator[]("LIST") = LIST;
 		this->operator[]("LOGIN") = LOGIN;
+		this->operator[]("LOGOUT") = LOGOUT;
 		this->operator[]("SEND") = SEND;
 		this->operator[]("BROADCAST") = BROADCAST;
 		this->operator[]("BLOCK") = BLOCK;
@@ -270,6 +272,19 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 
 	switch (command)
 	{
+	case LOGOUT:
+		if(!is_client){
+			log_error(my_command.c_str());
+			return;
+		}
+		encoded_data = "LOGOUT";
+		memset(msg, '\0', MSG_SIZE);
+		strcpy(msg, encoded_data.c_str());
+
+		if(send(client_fd, msg, strlen(msg), 0) == strlen(msg))
+			log_success(my_command.c_str(), buffer);
+		memset(msg, '\0', MSG_SIZE);
+		break;
 	case AUTHOR:
 		sprintf(buffer, "I, %s, have read and understood the course academic integrity policy.\n",
 		"prateekb");
@@ -467,8 +482,12 @@ void add_new_client(int client_fd, struct sockaddr_in client_addr){
 
 	struct hostent *hostname = NULL;
 	hostname = gethostbyaddr(&(client_addr.sin_addr), sizeof(client_addr.sin_addr), AF_INET);
-	string client_hostname(hostname->h_name);
-	// string client_hostname = "chinupc";
+	string client_hostname;
+	if(hostname && hostname->h_name){
+		client_hostname = hostname->h_name;
+	} else{
+		client_hostname = "testpc";
+	}
 
 	if(!found){
 		Client c = {
@@ -581,6 +600,7 @@ void start_server(int port)
 						if(fdaccept < 0)
 							perror("Accept failed.");
 						
+						//or update status
 						add_new_client(fdaccept, client_addr);
 
 						//send logged-in client details
@@ -637,9 +657,19 @@ void start_server(int port)
 							//Process incoming data from existing clients here ...
 							
 							printf("\nClient sent me: %s\n", buffer);
-							printf("ECHOing it back to the remote host ... ");
 							if(send(fdaccept, buffer, strlen(buffer), 0) == strlen(buffer)){
-								printf("Done!\n");
+								string c_msg(buffer);
+								if(c_msg == "LOGOUT"){
+									close(fdaccept);
+									FD_CLR(fdaccept, &master_list);
+
+									//set as logged out
+									for (auto it = begin (client_list); it != end (client_list); ++it) {
+										if(it->client_fd == fdaccept){
+											it->login_status = 0;
+										}
+									}
+								}
 							} else{
 								printf("Bad Bytes!\n");
 							}
