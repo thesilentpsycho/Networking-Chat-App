@@ -314,6 +314,7 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 			log_error(my_command.c_str());
 			return;
 		}
+		
 		//receive logged-in client details
 		char temp[512];
 		if(recv(client_fd, &temp, sizeof temp, 0) > 0){
@@ -675,12 +676,16 @@ int get_new_binding(int port){
 		exit(EXIT_FAILURE);
 	}
 
+	int option = 1;
+	setsockopt(client_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+
 	struct sockaddr_in client_addr;
 	client_addr.sin_addr.s_addr = INADDR_ANY;
     client_addr.sin_family = AF_INET;
     client_addr.sin_port = htons(port);
 
 	if(bind(client_fd, (struct sockaddr *)&client_addr,sizeof(struct sockaddr_in)) < 0){
+		perror("socket");
 		exit(EXIT_FAILURE);		//fatal
 	}
 
@@ -689,7 +694,7 @@ int get_new_binding(int port){
 
 int start_client(int port)
 {	
-	int client_fd = get_new_binding(port);
+	int client_fd = 10;
 
 	struct sockaddr_in server_addr;
 	
@@ -698,7 +703,6 @@ int start_client(int port)
 	fd_set master_list, watch_list;
 	FD_ZERO(&master_list);
 	FD_ZERO(&watch_list);
-	FD_SET(client_fd, &master_list);
 	FD_SET(STDIN, &master_list);
 	
 	char receive_buf[512];
@@ -719,17 +723,78 @@ int start_client(int port)
 					
 					cmd[strcspn(cmd, "\n")] = '\0';
 					
-					string c_command(cmd);
-					if(c_command == "LOGOUT"){
+					string c_cmd(cmd);
+					vector<string> c_command = split(c_cmd, " ");
+					if(c_command[0] == "LOGOUT"){
 						close(client_fd);
-						// FD_CLR(client_fd, &master_list);
+						FD_CLR(client_fd, &master_list);
 						// // client_fd = get_new_binding(port);
-						// FD_SET(client_fd, &master_list);
-						cse4589_print_and_log("[%s:SUCCESS]\n", c_command.c_str());
-						cse4589_print_and_log("[%s:END]\n", c_command.c_str());
+						cse4589_print_and_log("[%s:SUCCESS]\n", c_command[0].c_str());
+						cse4589_print_and_log("[%s:END]\n", c_command[0].c_str());
 						continue;
+					} else if (c_command[0] == "LOGIN"){
+						cout << "direct login" << endl;
+						int server_port = atoi(c_command[2].c_str());
+						server_addr.sin_family = AF_INET;
+						server_addr.sin_addr.s_addr = inet_addr(c_command[1].c_str());
+						server_addr.sin_port = htons(server_port);
+						client_fd = get_new_binding(port);
+						if(connect(client_fd, (struct sockaddr*) &server_addr, sizeof server_addr) != 0){
+							perror("socket");
+							cout << "cant connect" << endl;
+							// log_error(my_command.c_str());
+							continue;
+						}
+						
+						//receive logged-in client details
+						char temp[512];
+						if(recv(client_fd, &temp, sizeof temp, 0) > 0){
+							string dat(temp);
+							// cout<< dat<< endl;
+							c_client_list.clear();
+							if(dat != ""){
+								vector<string> clients = split(dat, "::::");
+								if(clients.size() >= 1){
+									// detail includes data in this format ip::hostname
+									vector<string> details = split(clients[0], "$$");
+									for(auto& d:details){
+										vector<string> curr_detail = split(d, "::");
+										Client c = {
+											curr_detail[0], 
+											-1, 
+											curr_detail[1],
+											std::stoi(curr_detail[2]),
+											1,
+											0,
+											0
+										};
+										c_client_list.push_back(c);
+									}
+								}
+							}
+						}
+
+						//pull pending messages one by one
+						uint32_t un;
+						if(recv(client_fd, &un, sizeof(uint32_t), 0) > 0){
+							int total = ntohl(un);
+							for (int i = 1; i <= total; i++)
+							{
+								char temp[512];
+								if(recv(client_fd, &temp, sizeof temp, 0) > 0){
+									string dat(temp);
+									vector<string> mess = split(dat, "$$");
+									log_relay_message(mess[0], mess[1]);
+								}
+							}
+						}
+
+						FD_SET(client_fd, &master_list);
+						cse4589_print_and_log("[%s:SUCCESS]\n", c_command[0].c_str());
+						cse4589_print_and_log("[%s:END]\n", c_command[0].c_str());
+					} else{
+						act_on_command(cmd, port, true, client_fd);
 					}
-					act_on_command(cmd, port, true, client_fd);
 
 					free(cmd);
 			} else if(FD_ISSET(client_fd, &watch_list)) {
