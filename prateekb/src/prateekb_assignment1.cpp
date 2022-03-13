@@ -236,7 +236,12 @@ string concat(vector<string> vec, string delimiter){
 	ostringstream concatenated;
 	copy(vec.begin(), vec.end(),
            ostream_iterator<std::string>(concatenated, delimiter.c_str()));
-	return concatenated.str();
+	string result = concatenated.str();
+	if (!result.empty()) {
+    	result.resize(result.length() - delimiter.length()); // trim trailing delimiter. such a shame
+	}
+
+	return result;
 }
 
 void act_on_command(char *cmd, int port, bool is_client, int client_fd){
@@ -311,7 +316,7 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		char temp[512];
 		if(recv(client_fd, &temp, sizeof temp, 0) > 0){
 			string dat(temp);
-			cout<< dat<< endl;
+			// cout<< dat<< endl;
 			c_client_list.clear();
 			if(dat != ""){
 				vector<string> clients = split(dat, "::::");
@@ -349,9 +354,9 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 				}
 			}
 		}
+		cse4589_print_and_log("[%s:SUCCESS]\n", my_command.c_str());
+		cse4589_print_and_log("[%s:END]\n", my_command.c_str());
 
-
-		log_success(my_command.c_str(), buffer);
 		break;
 	case SEND:
 		if(command_chunks.size() < 3){
