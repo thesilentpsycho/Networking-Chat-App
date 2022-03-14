@@ -92,7 +92,6 @@ struct Block{
 };
 
 struct Message {
-	int id;
 	string from;
 	string to;
 	string msg;
@@ -216,6 +215,14 @@ vector<Client> get_logged_in_clients(){
 Client* find_client(string& client_ip){
 	for (auto& c : client_list){
 		if (c.ip == client_ip)
+			return &c;
+	}
+	return nullptr;
+}
+
+Client* find_client_by_fd(int fd){
+	for (auto& c : client_list){
+		if (c.client_fd == fd)
 			return &c;
 	}
 	return nullptr;
@@ -361,24 +368,6 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		cse4589_print_and_log("[%s:END]\n", my_command.c_str());
 
 		break;
-	case SEND:
-		if(command_chunks.size() < 3){
-			log_error(my_command.c_str());
-			return;
-		} else if(!is_valid_ip(command_chunks[1])){
-			log_error(my_command.c_str());
-			return;
-		}
-		copy(command_chunks.begin() + 2, command_chunks.end(),
-           ostream_iterator<std::string>(concatenated, " "));
-
-		encoded_data = "SEND_ONE::::" + command_chunks[1] + "::::" + concatenated.str();
-		memset(msg, '\0', MSG_SIZE);
-		strcpy(msg, encoded_data.c_str());
-
-		if(send(client_fd, msg, strlen(msg), 0) == strlen(msg))
-			log_success(my_command.c_str(), buffer);
-		break;
 	case BROADCAST:
 		if(command_chunks.size() < 2){
 			log_error(my_command.c_str());
@@ -500,6 +489,48 @@ vector<Message> filter_pending_messages(string to_ip){
 	}
 
 	return result;
+}
+
+bool is_online(string ip){
+	for(auto& c: client_list){
+		if(c.ip == ip && c.login_status == 1){
+			return true;
+		}
+	}
+	return false;
+}
+
+int find_client_fd_from_ip(string ip){
+	for(auto& c: client_list){
+		if(c.ip == ip){
+			return c.client_fd;
+		}
+	}
+	return 0;
+}
+
+int send_data_over_socket(int socket_id, string data){
+	char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
+	memset(msg, '\0', MSG_SIZE);
+	strcpy(msg, data.c_str());
+	int bytes_sent = send(socket_id, msg, strlen(msg), 0);
+	free(msg);
+
+	return bytes_sent > 0 ? bytes_sent : -1;
+}
+
+void relay_message_from_server(string to_ip, string message_body, int from_fd){
+	Client* sender = find_client_by_fd(from_fd);
+	
+	if(!is_online(to_ip)){
+		pending_messages.push_back({sender->ip, to_ip, message_body});
+		return;
+	}
+	//sending right now
+	int receiver_handle = find_client_fd_from_ip(to_ip);
+	string data = sender->ip + "::::" + message_body;
+
+	send_data_over_socket(receiver_handle, data);	
 }
 
 
@@ -653,25 +684,25 @@ void start_server(int port)
 							if(buffer){
 								c_msg = buffer;
 							}
-							cout << "Client sent me: " << c_msg << endl;
-							if(c_msg == "REFRESH") {
+							string s_cmd(c_msg);
+							cout << "Client sent me: " << s_cmd << endl;
+							vector<string> s_command = split(s_cmd, "::::");
+							if(s_command[0] == "REFRESH") {
 								//send neighbours
 								vector<Client> clients = get_logged_in_clients();
 								vector<string> clientIPs;
 								for (auto& c : clients){
 									clientIPs.push_back(c.ip + "::" + c.hostname + "::" + to_string(c.port_no));
 								}
-								for (auto& c : clientIPs){
-									cout << c << endl;
-								}
 								string data = concat(clientIPs, "$$");
-								cout << "ListSent:" << data << endl;
 								char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
 								memset(msg, '\0', MSG_SIZE);
 								strcpy(msg, data.c_str());
-								cout << "MsgListSent:" << msg << endl;
 								send(sock_index, msg, strlen(msg), 0);
 								free(msg);
+							} else if (s_command[0] == "SEND"){
+								vector<string> details = split(s_command[1], "$$");
+								relay_message_from_server(details[0] , details[1], sock_index);
 							}
 							fflush(stdout);
 						}
@@ -842,7 +873,27 @@ int start_client(int port)
 						} else{
 							log_error(c_command[0].c_str());
 						}
-					} else{
+					} else if(c_command[0] == "SEND"){
+						
+						if(c_command.size() >= 3 && is_valid_ip(c_command[1])){
+							int index = c_cmd.find(" ");
+							c_cmd = c_cmd.substr(index+1);
+							index = c_cmd.find(" ");
+							string message_body = c_cmd.substr(index+1);
+							string to_ip = c_cmd.substr(0,index);
+
+							string encoded_data = "SEND::::" + to_ip + "$$" + message_body;
+							memset(msg, '\0', MSG_SIZE);
+							strcpy(msg, encoded_data.c_str());
+
+							if(send(client_fd, msg, strlen(msg), 0) == strlen(msg)) {
+								cse4589_print_and_log("[%s:SUCCESS]\n", c_command[0].c_str());
+								cse4589_print_and_log("[%s:END]\n", c_command[0].c_str());
+							}
+						} else {
+							log_error(c_command[0].c_str());
+						}
+					} else {
 						act_on_command(cmd, port, true, client_fd);
 					}
 
@@ -852,16 +903,10 @@ int start_client(int port)
 				
 				int val = recv(client_fd, &receive_buf, sizeof receive_buf, 0);
 				if(val > 0) {
-					cout<<"recv val:"<<val<<std::endl;
 					vector<string> parts = split(receive_buf, "::::");
-					string command = parts[0];
-					if(command == "MSG") {
-						char temp_buf[sizeof receive_buf];
-						string disp_command = "RECEIVED";
-						sprintf(temp_buf, "msg from:%s\n[msg]:%s\n",
-						parts[1].c_str(), parts[2].c_str());
-						log_success(disp_command.c_str(), temp_buf);
-					}
+					cse4589_print_and_log("[RECEIVED:SUCCESS]\n");
+					cse4589_print_and_log("msg from:%s\n[msg]:%s\n", parts[0].c_str() , parts[1].c_str());
+					cse4589_print_and_log("[RECEIVED:END]\n");
 				}
 			}
 		}
