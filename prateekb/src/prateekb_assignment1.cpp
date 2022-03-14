@@ -717,7 +717,7 @@ void receive_neighbours(int client_fd){
 
 	if(recv(client_fd, msg, MSG_SIZE, 0) > 0){
 		string dat = msg;
-		cse4589_print_and_log("\nDAT:%s", dat.c_str());
+		// cse4589_print_and_log("\nDAT:%s", dat.c_str());
 		c_client_list.clear();
 		if(dat != ""){
 			vector<string> clients = split(dat, "::::");
@@ -836,7 +836,6 @@ int start_client(int port)
 						strcpy(msg, c_command[0].c_str());
 
 						if(send(client_fd, msg, strlen(msg), 0) == strlen(msg)){
-							cse4589_print_and_log("sent refresh signal..");
 							receive_neighbours(client_fd);
 							cse4589_print_and_log("[%s:SUCCESS]\n", c_command[0].c_str());
 							cse4589_print_and_log("[%s:END]\n", c_command[0].c_str());
