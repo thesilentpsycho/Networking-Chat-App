@@ -386,17 +386,6 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		}
 		cse4589_print_and_log("[%s:END]\n", my_command.c_str());
 		break;
-	case STATISTICS:
-		std::sort(client_list.begin(), client_list.end());
-		cse4589_print_and_log("[%s:SUCCESS]\n", my_command.c_str());
-		for (int index = 0; index < client_list.size(); ++index) {
-			// cse4589_print_and_log("%-5d%-35s%-8d%-8d%-8s\n",
-			// index + 1, client_list[index].hostname,
-			// client_list[index].count_sent, client_list[index].count_received,
-			// client_list[index].login_status == 1 ? LOGGEDIN: LOGGEDOUT);	
-		}
-		cse4589_print_and_log("[%s:END]\n", my_command.c_str());
-		break;
 	default:
 		break;
 	}
@@ -655,6 +644,19 @@ void start_server(int port)
 								idx += 1;
 								cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", 
 								idx, xyz.hostname.c_str(), xyz.ip.c_str(), xyz.port_no);
+							}
+							cse4589_print_and_log("[%s:END]\n", ss_command[0].c_str());
+						} else if(ss_command[0] == "STATISTICS"){
+							std::sort(client_list.begin(), client_list.end());
+							cse4589_print_and_log("[%s:SUCCESS]\n", ss_command[0].c_str());
+							int idx1 = 0;
+							string lin = "logged-in";
+							string lout = "logged-out";
+							for(auto& c: client_list){
+								idx1 += 1;
+								cse4589_print_and_log("%-5d%-35s%-8d%-8d%-8s\n",
+								idx1, c.hostname.c_str(), c.count_sent, c.count_received,
+								c.login_status == 1 ? lin.c_str() : lout.c_str());
 							}
 							cse4589_print_and_log("[%s:END]\n", ss_command[0].c_str());
 						} else{
