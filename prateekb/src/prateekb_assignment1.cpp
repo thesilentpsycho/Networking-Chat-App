@@ -655,16 +655,21 @@ void start_server(int port)
 							}
 							cout << "Client sent me: " << c_msg << endl;
 							if(c_msg == "REFRESH") {
-								//send logged-in client details
+								//send neighbours
 								vector<Client> clients = get_logged_in_clients();
 								vector<string> clientIPs;
 								for (auto& c : clients){
 									clientIPs.push_back(c.ip + "::" + c.hostname + "::" + to_string(c.port_no));
 								}
+								for (auto& c : clientIPs){
+									cout << c << endl;
+								}
 								string data = concat(clientIPs, "$$");
+								cout << "ListSent:" << data << endl;
 								char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
 								memset(msg, '\0', MSG_SIZE);
 								strcpy(msg, data.c_str());
+								cout << "MsgListSent:" << msg << endl;
 								send(sock_index, msg, strlen(msg), 0);
 								free(msg);
 							}
@@ -706,11 +711,13 @@ int get_new_binding(int port){
 }
 
 void receive_neighbours(int client_fd){
-		//receive logged-in client details
-	char temp[512];
-	if(recv(client_fd, &temp, sizeof temp, 0) > 0){
-		string dat(temp);
-		cout<< dat<< endl;
+	//receive logged-in client details
+	char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
+	memset(msg, '\0', MSG_SIZE);
+
+	if(recv(client_fd, msg, MSG_SIZE, 0) > 0){
+		string dat = msg;
+		cse4589_print_and_log("\nDAT:%s", dat.c_str());
 		c_client_list.clear();
 		if(dat != ""){
 			vector<string> clients = split(dat, "::::");
@@ -733,6 +740,8 @@ void receive_neighbours(int client_fd){
 			}
 		}
 	}
+
+	free(msg);
 }
 
 int start_client(int port)
@@ -827,7 +836,7 @@ int start_client(int port)
 						strcpy(msg, c_command[0].c_str());
 
 						if(send(client_fd, msg, strlen(msg), 0) == strlen(msg)){
-							cout<< "sent refresh signal.." << endl;
+							cse4589_print_and_log("sent refresh signal..");
 							receive_neighbours(client_fd);
 							cse4589_print_and_log("[%s:SUCCESS]\n", c_command[0].c_str());
 							cse4589_print_and_log("[%s:END]\n", c_command[0].c_str());
