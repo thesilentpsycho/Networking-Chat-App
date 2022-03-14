@@ -616,7 +616,50 @@ void start_server(int port)
 							exit(-1);
 						
 						cmd[strcspn(cmd, "\n")] = '\0';
-						act_on_command(cmd, port, false, -1);
+
+						//server shell command received
+						string ss_cmd(cmd);
+						vector<string> ss_command = split(ss_cmd, " ");
+						
+						if(ss_command[0] == "BLOCKED"){
+							if(ss_command.size() != 2){
+								log_error(ss_command[0].c_str());
+								free(cmd);
+								continue;
+							}
+							if(!is_valid_ip(ss_command[1])){
+								log_error(ss_command[0].c_str());
+								free(cmd);
+								continue;
+							}
+							bool found = false;
+							for(auto& c:client_list){
+								if(c.ip == ss_command[1]){
+									found = true;
+								}
+							}
+							if(!found){
+								log_error(ss_command[0].c_str());
+								free(cmd);
+								continue;
+							}
+							cse4589_print_and_log("[%s:SUCCESS]\n", ss_command[0].c_str());
+							vector<Client> temp_list;
+							for(auto& b:block_list){
+								if(b.blocker == ss_command[1])
+									temp_list.push_back(*find_client(b.blocked));
+							}
+							std::sort(temp_list.begin(), temp_list.end());
+							int idx = 0;
+							for(auto& xyz: temp_list){
+								idx += 1;
+								cse4589_print_and_log("%-5d%-35s%-20s%-8d\n", 
+								idx, xyz.hostname.c_str(), xyz.ip.c_str(), xyz.port_no);
+							}
+							cse4589_print_and_log("[%s:END]\n", ss_command[0].c_str());
+						} else{
+							act_on_command(cmd, port, false, -1);
+						}
 						
 						free(cmd);
 					}
