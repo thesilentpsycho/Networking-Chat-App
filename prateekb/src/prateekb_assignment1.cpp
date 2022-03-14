@@ -45,7 +45,7 @@ using namespace std;
 #define BACKLOG 5
 #define STDIN 0
 #define TRUE 1
-#define CMD_SIZE 100
+#define CMD_SIZE 512
 #define MSG_SIZE 512
 #define BUFFER_SIZE 512
 #define UDP_PORT 53
@@ -443,10 +443,21 @@ int send_data_over_socket(int socket_id, string data){
 	char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
 	memset(msg, '\0', MSG_SIZE);
 	strcpy(msg, data.c_str());
-	int bytes_sent = send(socket_id, msg, strlen(msg), 0);
+
+	int total = 0;        // how many bytes we've sent
+    int bytesleft = 512; // how many we have left to send
+    int n;
+
+    while(total < 512) {
+        n = send(socket_id, msg+total, bytesleft, 0);
+        if (n == -1) { break; }
+        total += n;
+        bytesleft -= n;
+    }
+
 	free(msg);
 
-	return bytes_sent > 0 ? bytes_sent : -1;
+	return total > 0 ? total : -1;
 }
 
 bool is_blocked(string blocker, string blocked){
@@ -959,7 +970,7 @@ int start_client(int port)
 							memset(msg, '\0', MSG_SIZE);
 							strcpy(msg, encoded_data.c_str());
 
-							if(send(client_fd, msg, strlen(msg), 0) == strlen(msg)) {
+							if(send(client_fd, msg, MSG_SIZE, 0) > 0) {
 								log_success_simple(c_command[0]);
 							}
 						} else {
