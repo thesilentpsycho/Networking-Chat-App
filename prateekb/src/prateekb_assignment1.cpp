@@ -789,8 +789,6 @@ int start_client(int port)
 	FD_SET(STDIN, &master_list);
 
 	char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
-	
-	char receive_buf[512];
 
 	while(TRUE) {
 		memcpy(&watch_list, &master_list, sizeof(master_list));
@@ -899,11 +897,12 @@ int start_client(int port)
 
 					free(cmd);
 			} else if(FD_ISSET(client_fd, &watch_list)) {
-				memset(receive_buf, 0, sizeof receive_buf);
-				
-				int val = recv(client_fd, &receive_buf, sizeof receive_buf, 0);
+				memset(msg, '\0', MSG_SIZE);
+
+				int val = recv(client_fd, msg, MSG_SIZE, 0);
+				string data(msg);
 				if(val > 0) {
-					vector<string> parts = split(receive_buf, "::::");
+					vector<string> parts = split(data, "::::");
 					cse4589_print_and_log("[RECEIVED:SUCCESS]\n");
 					cse4589_print_and_log("msg from:%s\n[msg]:%s\n", parts[0].c_str() , parts[1].c_str());
 					cse4589_print_and_log("[RECEIVED:END]\n");
