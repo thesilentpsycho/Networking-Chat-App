@@ -487,6 +487,9 @@ void relay_message_from_server(string to_ip, string message_body, int from_fd){
 		return;
 	}
 
+	Client* temp1 = find_client(to_ip);
+	temp1->count_received += 1;
+
 	if(!is_online(to_ip)){
 		pending_messages.push_back({sender->ip, to_ip, message_body});
 		return;
@@ -755,9 +758,25 @@ void start_server(int port)
 								free(msg);
 							} else if (s_command[0] == "SEND"){
 								vector<string> details = split(s_command[1], "$$");
+								Client* temp1 = find_client_by_fd(sock_index);
+								temp1->count_sent += 1;
 								relay_message_from_server(details[0] , details[1], sock_index);
+								string tempc = "RELAYED";
+								cse4589_print_and_log("[%s:SUCCESS]\n", tempc.c_str());
+								cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n"
+										, temp1->ip.c_str(), details[0].c_str(), details[1].c_str());
+								cse4589_print_and_log("[%s:END]\n", tempc.c_str());
 							} else if(s_command[0] == "BROADCAST"){
+								Client* temp1 = find_client_by_fd(sock_index);
+								temp1->count_sent += 1;
 								broadcast_message_from_server(s_command[1], sock_index);
+
+								string tempc = "RELAYED";
+								string dummy = "255.255.255.255";
+								cse4589_print_and_log("[%s:SUCCESS]\n", tempc.c_str());
+								cse4589_print_and_log("msg from:%s, to:%s\n[msg]:%s\n"
+										, temp1->ip.c_str(), dummy.c_str(), s_command[1].c_str());
+								cse4589_print_and_log("[%s:END]\n", tempc.c_str());
 							} else if(s_command[0] == "BLOCK"){
 								block_user(s_command[1], sock_index);
 							} else if(s_command[0] == "UNBLOCK"){
