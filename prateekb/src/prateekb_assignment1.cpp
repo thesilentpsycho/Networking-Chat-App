@@ -501,6 +501,16 @@ void relay_message_from_server(string to_ip, string message_body, int from_fd){
 	send_data_over_socket(receiver_handle, data);	
 }
 
+void clear_client_data(int client_handle){
+	for(auto it = client_list.begin(); it != client_list.end();){
+		if(it->client_fd == client_handle){
+			it = client_list.erase(it); 
+		} else {
+			++it;
+		}
+	}
+}
+
 void unblock_user(string to_be_unblocked, int from_fd){
 	Client* sender = find_client_by_fd(from_fd);
 
@@ -756,6 +766,8 @@ void start_server(int port)
 								strcpy(msg, data.c_str());
 								send(sock_index, msg, strlen(msg), 0);
 								free(msg);
+							} else if(s_command[0] == "EXIT"){
+								clear_client_data(sock_index);
 							} else if (s_command[0] == "SEND"){
 								vector<string> details = split(s_command[1], "$$");
 								Client* temp1 = find_client_by_fd(sock_index);
@@ -894,6 +906,15 @@ int start_client(int port)
 						cse4589_print_and_log("[%s:END]\n", c_command[0].c_str());
 						free(cmd);
 						continue;
+					} else if(c_command[0] == "EXIT"){
+						if (send_data_over_socket(client_fd, "EXIT") > 0){
+							close(client_fd);
+							FD_CLR(client_fd, &master_list);
+							log_success_simple(c_command[0]);
+						}
+						free(cmd);
+						free(msg);
+						exit(0);
 					} else if (c_command[0] == "LOGIN"){
 						cout << "direct login" << endl;
 						if(c_command.size() != 3){
