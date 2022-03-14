@@ -693,7 +693,7 @@ void start_server(int port)
 								++it;
 							}
 						}
-						printf("\nRemote Host connected!\n");                        
+						//printf("\nRemote Host connected!\n");                        
 						
 						/* Add to watched socket list */
 						FD_SET(fdaccept, &master_list);
@@ -716,7 +716,7 @@ void start_server(int port)
 									it->login_status = 0;
 								}
 							}
-							printf("Remote Host terminated connection!\n");
+							//printf("Remote Host terminated connection!\n");
 						}
 						else {
 							//Process incoming data from existing clients here ...
@@ -726,7 +726,7 @@ void start_server(int port)
 								c_msg = buffer;
 							}
 							string s_cmd(c_msg);
-							cout << "Client sent me: " << s_cmd << endl;
+							//cout << "Client sent me: " << s_cmd << endl;
 							vector<string> s_command = split(s_cmd, "::::");
 							if(s_command[0] == "REFRESH") {
 								//send neighbours
@@ -921,9 +921,9 @@ int start_client(int port)
 
 						//pull pending messages one by one
 						int no_of_buffered_msgs = receive_int_from_socket(client_fd);
-						cout << "Total " << no_of_buffered_msgs << " Pending!"<< endl;
+						//cout << "Total " << no_of_buffered_msgs << " Pending!"<< endl;
 						while(no_of_buffered_msgs > 0){
-							cout << no_of_buffered_msgs << " to go.."<< endl;
+							//cout << no_of_buffered_msgs << " to go.."<< endl;
 							int msg_length = receive_int_from_socket(client_fd);
 							string message_data = receive_data_from_socket_with_len(client_fd, msg_length);
 							vector<string> mess = split(message_data, "$$");
