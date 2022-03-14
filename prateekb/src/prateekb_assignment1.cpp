@@ -443,21 +443,11 @@ int send_data_over_socket(int socket_id, string data){
 	char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
 	memset(msg, '\0', MSG_SIZE);
 	strcpy(msg, data.c_str());
-
-	int total = 0;        // how many bytes we've sent
-    int bytesleft = 512; // how many we have left to send
-    int n;
-
-    while(total < 512) {
-        n = send(socket_id, msg+total, bytesleft, 0);
-        if (n == -1) { break; }
-        total += n;
-        bytesleft -= n;
-    }
+	int bytes_sent = send(socket_id, msg, strlen(msg), 0);
 
 	free(msg);
 
-	return total > 0 ? total : -1;
+	return bytes_sent > 0 ? bytes_sent : -1;
 }
 
 bool is_blocked(string blocker, string blocked){
