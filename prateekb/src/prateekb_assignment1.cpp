@@ -101,6 +101,8 @@ struct Message {
 std::vector<Message> pending_messages;
 std::vector<Client> client_list;
 std::vector<Block> block_list;
+//local copy of blocked ips
+std::vector<string> c_block_list;
 //local copy of client
 std::vector<Client> c_client_list;
 const char* LOGGEDIN = "logged-in";
@@ -373,21 +375,6 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		cse4589_print_and_log("[%s:END]\n", my_command.c_str());
 
 		break;
-	case BLOCK:
-		if(command_chunks.size() < 2){
-			log_error(my_command.c_str());
-			return;
-		}
-		copy(command_chunks.begin() + 1, command_chunks.end(),
-           ostream_iterator<std::string>(concatenated, " "));
-
-		encoded_data = "BLOCK::::" + concatenated.str();
-		memset(msg, '\0', MSG_SIZE);
-		strcpy(msg, encoded_data.c_str());
-
-		if(send(client_fd, msg, strlen(msg), 0) == strlen(msg))
-			log_success(my_command.c_str(), buffer);
-		break;
 	case UNBLOCK:
 		if(command_chunks.size() < 2){
 			log_error(my_command.c_str());
@@ -509,9 +496,23 @@ int send_data_over_socket(int socket_id, string data){
 	return bytes_sent > 0 ? bytes_sent : -1;
 }
 
+bool is_blocked(string blocker, string blocked){
+	for(auto& entry: block_list){
+		if(entry.blocked == blocked && entry.blocker == blocker){
+			return true;
+		}
+	}
+	return false;
+}
+
 void relay_message_from_server(string to_ip, string message_body, int from_fd){
 	Client* sender = find_client_by_fd(from_fd);
-	
+
+	if(is_blocked(to_ip, sender->ip)){
+		//ignore message. pathetic!
+		return;
+	}
+
 	if(!is_online(to_ip)){
 		pending_messages.push_back({sender->ip, to_ip, message_body});
 		return;
@@ -521,6 +522,14 @@ void relay_message_from_server(string to_ip, string message_body, int from_fd){
 	string data = sender->ip + "::::" + message_body;
 
 	send_data_over_socket(receiver_handle, data);	
+}
+
+void block_user(string to_be_blocked, int from_fd){
+	Client* sender = find_client_by_fd(from_fd);
+
+	if(!is_blocked(sender->ip, to_be_blocked)){
+		block_list.push_back({sender->ip, to_be_blocked});
+	}
 }
 
 void broadcast_message_from_server(string message_body, int from_fd){
@@ -705,6 +714,8 @@ void start_server(int port)
 								relay_message_from_server(details[0] , details[1], sock_index);
 							} else if(s_command[0] == "BROADCAST"){
 								broadcast_message_from_server(s_command[1], sock_index);
+							} else if(s_command[0] == "BLOCK"){
+								block_user(s_command[1], sock_index);
 							}
 							fflush(stdout);
 						}
@@ -816,19 +827,23 @@ int start_client(int port)
 						// // client_fd = get_new_binding(port);
 						cse4589_print_and_log("[%s:SUCCESS]\n", c_command[0].c_str());
 						cse4589_print_and_log("[%s:END]\n", c_command[0].c_str());
+						free(cmd);
 						continue;
 					} else if (c_command[0] == "LOGIN"){
 						cout << "direct login" << endl;
 						if(c_command.size() != 3){
 							log_error(c_command[0].c_str());
+							free(cmd);
 							continue;
 						} else if(!is_valid_ip(c_command[1]) || !is_number(c_command[2].c_str())){
 							log_error(c_command[0].c_str());
+							free(cmd);
 							continue;
 						}
 						int server_port = atoi(c_command[2].c_str());
 						if(server_port < 1 || server_port > 65535){
 							log_error(c_command[0].c_str());
+							free(cmd);
 							continue;
 						}
 
@@ -838,6 +853,7 @@ int start_client(int port)
 						client_fd = get_new_binding(port);
 						if(connect(client_fd, (struct sockaddr*) &server_addr, sizeof server_addr) != 0){
 							perror("socket cant connect");
+							free(cmd);
 							continue;
 						}
 						
@@ -900,6 +916,57 @@ int start_client(int port)
 							if (send_data_over_socket(client_fd, encoded_data) > 0)
 								log_success_simple(c_command[0]);
 						} else{
+							log_error(c_command[0].c_str());
+						}
+					} else if(c_command[0] == "BLOCK"){
+						//cout << "### a" << endl;
+						if(c_command.size() == 2){
+							//cout << "### b" << endl;
+							string to_be_blocked_ip = c_command[1];
+							if(!is_valid_ip(to_be_blocked_ip)){
+								//cout << "### c" << endl;
+								log_error(c_command[0].c_str());
+								free(cmd);
+								continue;
+							}
+							bool is_already_blocked = false;
+							for(auto& blocked_ip: c_block_list){
+								//cout << "### d" << endl;
+								if(blocked_ip == to_be_blocked_ip){
+									is_already_blocked = true;
+									break;
+								}
+							}
+							if(is_already_blocked){
+								log_error(c_command[0].c_str());
+								free(cmd);
+								continue;
+							}
+
+							//cout << "### e" << endl;
+							bool found = false;
+							for(auto& c: c_client_list){
+								if(c.ip == to_be_blocked_ip){
+									//cout << "### f" << endl;
+									found = true;
+								}
+							}
+							//should not block ip which we don't know about
+							if(!found){
+								//cout << "### g" << endl;
+								log_error(c_command[0].c_str());
+								free(cmd);
+								continue;
+							}
+							//cout << "### h" << endl;
+							string encoded_data = "BLOCK::::" + to_be_blocked_ip;
+							if(send_data_over_socket(client_fd, encoded_data) > 0){
+								//cout << "### i" << endl;
+								c_block_list.push_back(to_be_blocked_ip);	//blocked locally
+								log_success_simple(c_command[0]);
+							}
+						} else{
+							//cout << "### j" << endl;
 							log_error(c_command[0].c_str());
 						}
 					} else {
