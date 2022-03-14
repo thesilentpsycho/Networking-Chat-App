@@ -306,75 +306,6 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		sprintf(buffer, "PORT:%d\n", port);
 		log_success(my_command.c_str(), buffer);
 		break;
-	case LOGIN:
-		if(command_chunks.size() != 3){
-			log_error(my_command.c_str());
-			return;
-		} else if(!is_valid_ip(command_chunks[1]) || !is_number(command_chunks[2].c_str())){
-			log_error(my_command.c_str());
-			return;
-		}
-
-		server_port = atoi(command_chunks[2].c_str());
-		if(server_port < 1 || server_port > 65535){
-			log_error(my_command.c_str());
-			return;
-		}
-
-		server_addr.sin_family = AF_INET;
-    	server_addr.sin_addr.s_addr = inet_addr(command_chunks[1].c_str());
-    	server_addr.sin_port = htons(server_port);
-		if(connect(client_fd, (struct sockaddr*) &server_addr, sizeof server_addr) != 0){
-			log_error(my_command.c_str());
-			return;
-		}
-		
-		//receive logged-in client details
-		char temp[512];
-		if(recv(client_fd, &temp, sizeof temp, 0) > 0){
-			string dat(temp);
-			// cout<< dat<< endl;
-			c_client_list.clear();
-			if(dat != ""){
-				vector<string> clients = split(dat, "::::");
-				if(clients.size() >= 1){
-					// detail includes data in this format ip::hostname
-					vector<string> details = split(clients[0], "$$");
-					for(auto& d:details){
-						vector<string> curr_detail = split(d, "::");
-						Client c = {
-							curr_detail[0], 
-							-1, 
-							curr_detail[1],
-							std::stoi(curr_detail[2]),
-							1,
-							0,
-							0
-						};
-						c_client_list.push_back(c);
-					}
-				}
-			}
-		}
-
-		//pull pending messages one by one
-		uint32_t un;
-		if(recv(client_fd, &un, sizeof(uint32_t), 0) > 0){
-			int total = ntohl(un);
-			for (int i = 1; i <= total; i++)
-			{
-				char temp[512];
-				if(recv(client_fd, &temp, sizeof temp, 0) > 0){
-					string dat(temp);
-					vector<string> mess = split(dat, "$$");
-					log_relay_message(mess[0], mess[1]);
-				}
-			}
-		}
-		cse4589_print_and_log("[%s:SUCCESS]\n", my_command.c_str());
-		cse4589_print_and_log("[%s:END]\n", my_command.c_str());
-
-		break;
 	case LIST:
 		logged_in_clients = is_client ? c_client_list: get_logged_in_clients();
 		std::sort(logged_in_clients.begin(), logged_in_clients.end());
@@ -916,7 +847,6 @@ int start_client(int port)
 						free(msg);
 						exit(0);
 					} else if (c_command[0] == "LOGIN"){
-						cout << "direct login" << endl;
 						if(c_command.size() != 3){
 							log_error(c_command[0].c_str());
 							free(cmd);
