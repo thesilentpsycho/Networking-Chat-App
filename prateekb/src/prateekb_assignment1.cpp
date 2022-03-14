@@ -132,6 +132,11 @@ void log_success(const char* command_str, const char* msg){
 	cse4589_print_and_log("[%s:END]\n", command_str);
 }
 
+void log_success_simple(string cmnd){
+	cse4589_print_and_log("[%s:SUCCESS]\n", cmnd.c_str());
+	cse4589_print_and_log("[%s:END]\n", cmnd.c_str());
+}
+
 void log_error(const char* command_str){
 	cse4589_print_and_log("[%s:ERROR]\n", command_str);
 	cse4589_print_and_log("[%s:END]\n", command_str);
@@ -368,21 +373,6 @@ void act_on_command(char *cmd, int port, bool is_client, int client_fd){
 		cse4589_print_and_log("[%s:END]\n", my_command.c_str());
 
 		break;
-	case BROADCAST:
-		if(command_chunks.size() < 2){
-			log_error(my_command.c_str());
-			return;
-		}
-		copy(command_chunks.begin() + 1, command_chunks.end(),
-           ostream_iterator<std::string>(concatenated, " "));
-
-		encoded_data = "SEND_ALL::::" + concatenated.str();
-		memset(msg, '\0', MSG_SIZE);
-		strcpy(msg, encoded_data.c_str());
-
-		if(send(client_fd, msg, strlen(msg), 0) == strlen(msg))
-			log_success(my_command.c_str(), buffer);
-		break;
 	case BLOCK:
 		if(command_chunks.size() < 2){
 			log_error(my_command.c_str());
@@ -531,6 +521,16 @@ void relay_message_from_server(string to_ip, string message_body, int from_fd){
 	string data = sender->ip + "::::" + message_body;
 
 	send_data_over_socket(receiver_handle, data);	
+}
+
+void broadcast_message_from_server(string message_body, int from_fd){
+	Client* sender = find_client_by_fd(from_fd);
+
+	for(auto& c: client_list){
+		if(c.ip != sender->ip){
+			relay_message_from_server(c.ip, message_body, from_fd);
+		}
+	}
 }
 
 
@@ -703,6 +703,8 @@ void start_server(int port)
 							} else if (s_command[0] == "SEND"){
 								vector<string> details = split(s_command[1], "$$");
 								relay_message_from_server(details[0] , details[1], sock_index);
+							} else if(s_command[0] == "BROADCAST"){
+								broadcast_message_from_server(s_command[1], sock_index);
 							}
 							fflush(stdout);
 						}
@@ -885,10 +887,19 @@ int start_client(int port)
 							strcpy(msg, encoded_data.c_str());
 
 							if(send(client_fd, msg, strlen(msg), 0) == strlen(msg)) {
-								cse4589_print_and_log("[%s:SUCCESS]\n", c_command[0].c_str());
-								cse4589_print_and_log("[%s:END]\n", c_command[0].c_str());
+								log_success_simple(c_command[0]);
 							}
 						} else {
+							log_error(c_command[0].c_str());
+						}
+					} else if (c_command[0] == "BROADCAST"){
+						if(c_command.size() >= 2) {
+							int index = c_cmd.find(" ");
+							string message_body = c_cmd.substr(index+1);
+							string encoded_data = "BROADCAST::::" + message_body;
+							if (send_data_over_socket(client_fd, encoded_data) > 0)
+								log_success_simple(c_command[0]);
+						} else{
 							log_error(c_command[0].c_str());
 						}
 					} else {
