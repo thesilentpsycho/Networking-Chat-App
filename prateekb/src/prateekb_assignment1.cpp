@@ -391,6 +391,54 @@ int find_client_fd_from_ip(string ip){
 	return 0;
 }
 
+string receive_data_from_socket(int socket_id){
+	char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
+	memset(msg, '\0', MSG_SIZE);
+	int bytes_received = recv(socket_id, msg, MSG_SIZE, 0);
+	if(bytes_received > 0){
+		string data(msg);
+		free(msg);
+		return data;
+	} else{
+		free(msg);
+		return "";
+	}
+}
+
+string receive_data_from_socket_with_len(int socket_id, int k){
+	char *msg = (char*) malloc(sizeof(char)*k);
+	memset(msg, '\0', k);
+	int bytes_received = recv(socket_id, msg, k, 0);
+	if(bytes_received > 0){
+		string data(msg);
+		free(msg);
+		return data;
+	} else{
+		free(msg);
+		return "";
+	}
+}
+
+int receive_int_from_socket(int socket_id){
+	int network_value;
+	int value;
+	int bytes_received = recv(socket_id, &network_value, 4, 0);
+	if(bytes_received > 0){
+		// cout << "num of bytes received: " << bytes_received << endl;
+		// cout << "integer form received: " << ntohl(network_value) << endl;
+		return ntohl(network_value);
+	}
+	return -1;
+}
+
+int send_int_over_socket(int socket_id, int value){
+	// cout << "sent number:" << value << endl;
+	int network_value = htonl(value);
+	int bytes_sent = send(socket_id, (const char*)&network_value, 4, 0);
+	// cout << "sent " << bytes_sent << " bytes" << endl;
+	return bytes_sent > 0 ? bytes_sent : -1;
+}
+
 int send_data_over_socket(int socket_id, string data){
 	char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
 	memset(msg, '\0', MSG_SIZE);
@@ -626,29 +674,25 @@ void start_server(int port)
 							clientIPs.push_back(c.ip + "::" + c.hostname + "::" + to_string(c.port_no));
 						}
 						string data = concat(clientIPs, "$$");
-						char *msg = (char*) malloc(sizeof(char)*MSG_SIZE);
-						memset(msg, '\0', MSG_SIZE);
-						strcpy(msg, data.c_str());
-						send(fdaccept, msg, strlen(msg), 0);
+						send_data_over_socket(fdaccept, data);
 
-						//send number of pending messages for this client
-						memset(msg, '\0', MSG_SIZE);
-						char ip[INET_ADDRSTRLEN];
-						inet_ntop(AF_INET, &(client_addr.sin_addr), ip, INET_ADDRSTRLEN);
-						string client_ip(ip);
-						vector<Message> messages = filter_pending_messages(client_ip);
-						uint32_t un = htonl(messages.size());
-						if(send(fdaccept, &un, sizeof(uint32_t), 0) == sizeof(uint32_t)){
-							// send pending messages one by one
-							for(auto& m: messages){
-								string encoded_data = m.from + "$$" + m.msg;
-								memset(msg, '\0', MSG_SIZE);
-								strcpy(msg, encoded_data.c_str());
-								send(fdaccept, msg, strlen(msg), 0);
+						Client* curr_client = find_client_by_fd(fdaccept);
+						vector<Message> messages = filter_pending_messages(curr_client->ip);
+
+						send_int_over_socket(fdaccept, messages.size());
+						for(auto it = pending_messages.begin(); it != pending_messages.end();){
+							if(it->to == curr_client->ip){
+
+								//skipping the blocking logic here. 
+								//forgiveness is the key
+								string encoded_data = it->from + "$$" + it->msg;
+								send_int_over_socket(fdaccept, encoded_data.length());
+								send_data_over_socket(fdaccept, encoded_data);
+								it = pending_messages.erase(it); 
+							} else {
+								++it;
 							}
 						}
-
-						free(msg);
 						printf("\nRemote Host connected!\n");                        
 						
 						/* Add to watched socket list */
@@ -876,18 +920,15 @@ int start_client(int port)
 						receive_neighbours(client_fd);
 
 						//pull pending messages one by one
-						uint32_t un;
-						if(recv(client_fd, &un, sizeof(uint32_t), 0) > 0){
-							int total = ntohl(un);
-							for (int i = 1; i <= total; i++)
-							{
-								char temp[512];
-								if(recv(client_fd, &temp, sizeof temp, 0) > 0){
-									string dat(temp);
-									vector<string> mess = split(dat, "$$");
-									log_relay_message(mess[0], mess[1]);
-								}
-							}
+						int no_of_buffered_msgs = receive_int_from_socket(client_fd);
+						cout << "Total " << no_of_buffered_msgs << " Pending!"<< endl;
+						while(no_of_buffered_msgs > 0){
+							cout << no_of_buffered_msgs << " to go.."<< endl;
+							int msg_length = receive_int_from_socket(client_fd);
+							string message_data = receive_data_from_socket_with_len(client_fd, msg_length);
+							vector<string> mess = split(message_data, "$$");
+							log_relay_message(mess[0], mess[1]);
+							no_of_buffered_msgs--;
 						}
 
 						FD_SET(client_fd, &master_list);
