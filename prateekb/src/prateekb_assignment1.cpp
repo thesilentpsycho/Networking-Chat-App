@@ -956,6 +956,19 @@ int start_client(int port)
 							string message_body = c_cmd.substr(index+1);
 							string to_ip = c_cmd.substr(0,index);
 
+							bool found = false;
+							for(auto& c: c_client_list){
+								if(c.ip == to_ip){
+									found = true;
+								}
+							}
+							//should not send to ip which we don't know about
+							if(!found){
+								log_error(c_command[0].c_str());
+								free(cmd);
+								continue;
+							}
+
 							string encoded_data = "SEND::::" + to_ip + "$$" + message_body;
 							memset(msg, '\0', MSG_SIZE);
 							strcpy(msg, encoded_data.c_str());
