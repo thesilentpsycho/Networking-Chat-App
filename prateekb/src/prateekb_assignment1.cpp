@@ -152,30 +152,27 @@ void log_relay_message(string from, string msg){
 
 int whats_my_ip(char *str)
 {
-    struct sockaddr_in udp;
-    int temp_udp =socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    int len = sizeof(udp);
+    struct sockaddr_in udp_addr;
+    int my_udp_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     
-    if (temp_udp == -1)
-    {
+    if (my_udp_socket == -1) {
         return 0;
     }
     
-    memset((char *) &udp, 0, sizeof(udp));
-    udp.sin_family = AF_INET;
-    udp.sin_port = htons(UDP_PORT);
-    inet_pton(AF_INET, "8.8.8.8", &udp.sin_addr);
+	int len = sizeof(udp_addr);
+    memset((char *) &udp_addr, 0, sizeof(udp_addr));
+    udp_addr.sin_family = AF_INET;
+    udp_addr.sin_port = htons(UDP_PORT);
+    inet_pton(AF_INET, "8.8.8.8", &udp_addr.sin_addr);
     
-    if (connect(temp_udp, (struct sockaddr *)&udp, sizeof(udp)) < 0)
-    {
+    if (connect(my_udp_socket, (struct sockaddr *)&udp_addr, sizeof(udp_addr)) < 0) {
         return 0;
     }
-    if (getsockname(temp_udp,(struct sockaddr *)&udp,(unsigned int*) &len) == -1)
-    {
+    if (getsockname(my_udp_socket,(struct sockaddr *)&udp_addr,(unsigned int*) &len) == -1){
         return 0;
     }
     
-    inet_ntop(AF_INET, &(udp.sin_addr), str, len);
+    inet_ntop(AF_INET, &(udp_addr.sin_addr), str, len);
     return 1;
 }
 
